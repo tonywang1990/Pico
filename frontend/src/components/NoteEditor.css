@@ -1,0 +1,541 @@
+.note-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  min-height: 0;
+  height: 100%;
+  overflow: hidden; /* Keep editor content contained */
+}
+
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-elevated);
+  padding: 0 16px;
+  gap: 8px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 10;
+}
+
+.tabs {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+}
+
+.tab:hover {
+  background: var(--bg-tertiary);
+}
+
+.tab.active {
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--accent-primary);
+  border-radius: 2px 2px 0 0;
+}
+
+.tab-title {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.tab.active .tab-title {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.tab-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.tab-title-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 2px solid var(--accent-primary);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  min-width: 80px;
+  color: var(--text-primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.edit-tab-btn {
+  padding: 4px;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.tab:hover .edit-tab-btn {
+  opacity: 1;
+}
+
+.edit-tab-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
+  transform: scale(1.1);
+}
+
+.close-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.tab:hover .close-tab-btn {
+  opacity: 1;
+}
+
+.close-tab-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  transform: scale(1.1);
+}
+
+.notes-browser {
+  position: relative;
+}
+
+.dark-mode-toggle,
+.notes-browser-btn,
+.new-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.dark-mode-toggle:hover,
+.notes-browser-btn:hover,
+.new-tab-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-secondary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.notes-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease;
+  pointer-events: all;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.notes-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-height: calc(100vh - 100px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideDown 0.2s ease;
+  will-change: transform, opacity;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.notes-menu-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.notes-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.note-item {
+  padding: 14px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.note-item:hover {
+  background: var(--bg-tertiary);
+  transform: translateX(2px);
+  box-shadow: var(--shadow-sm);
+  z-index: 2;
+}
+
+.note-item.active {
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.note-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--accent-primary);
+  border-radius: 0 2px 2px 0;
+}
+
+.note-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.note-item-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note-item-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.note-item-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.editor-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor {
+  width: 100%;
+  height: 100%;
+  padding: 40px 60px;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  line-height: 1.7;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  resize: none;
+  background: white;
+  color: #1a1a1a;
+}
+
+.editor::placeholder {
+  color: #ccc;
+}
+
+/* TipTap Editor Styling - Clean and Modern */
+.tiptap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+  backdrop-filter: var(--blur-glass);
+}
+
+.tiptap-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tiptap-toolbar button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.tiptap-toolbar button.is-active {
+  background: var(--accent-primary);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 24px;
+  background: var(--border-primary);
+  margin: 0 6px;
+  border-radius: 1px;
+}
+
+/* TipTap Editor Content */
+.ProseMirror {
+  padding: 40px 60px;
+  min-height: calc(100vh - 150px);
+  outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--text-tertiary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Heading Styles */
+.ProseMirror h1 {
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 1.5em 0 0.5em 0;
+}
+
+.ProseMirror h1:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.2em 0 0.5em 0;
+}
+
+.ProseMirror h2:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 1em 0 0.5em 0;
+}
+
+.ProseMirror h3:first-child {
+  margin-top: 0;
+}
+
+/* Paragraph Styles */
+.ProseMirror p {
+  margin: 0.75em 0;
+}
+
+/* List Styles */
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+
+.ProseMirror li {
+  margin: 0.25em 0;
+}
+
+.ProseMirror ul ul,
+.ProseMirror ol ol {
+  margin: 0.25em 0;
+}
+
+/* Code Styles */
+.ProseMirror code {
+  background: #f5f5f5;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 0.9em;
+  color: #e01e5a;
+}
+
+.ProseMirror pre {
+  background: #f5f5f5;
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+  color: #1a1a1a;
+}
+
+/* Blockquote Styles */
+.ProseMirror blockquote {
+  border-left: 4px solid #e5e5e5;
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #666;
+  font-style: italic;
+}
+
+/* Link Styles */
+.ProseMirror a,
+.ProseMirror a.note-link {
+  color: var(--accent-primary);
+  text-decoration: none;
+  border-bottom: 1.5px solid var(--accent-primary);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.ProseMirror a:hover,
+.ProseMirror a.note-link:hover {
+  background: rgba(79, 70, 229, 0.1);
+  border-bottom-color: var(--accent-hover);
+  color: var(--accent-hover);
+}
+
+.dark-mode .ProseMirror a:hover,
+.dark-mode .ProseMirror a.note-link:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+/* Horizontal Rule */
+.ProseMirror hr {
+  border: none;
+  border-top: 2px solid #e5e5e5;
+  margin: 2em 0;
+}
+
+/* Strong and Em */
+.ProseMirror strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
