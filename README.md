@@ -105,7 +105,7 @@ The API will start on http://localhost:8000
 cd frontend
 npm start
 ```
-The app will open in your browser at http://localhost:3000
+The app will open in your browser at http://localhost:4000
 
 ## Usage
 
@@ -299,7 +299,7 @@ To contribute or modify:
 
 1. Backend changes: Edit `backend/main.py`
 2. Frontend changes: Edit files in `frontend/src/`
-3. The backend runs on port 8000, frontend on port 3000
+3. The backend runs on port 8000, frontend on port 4000
 4. CORS is configured to allow communication between them
 
 ## License
