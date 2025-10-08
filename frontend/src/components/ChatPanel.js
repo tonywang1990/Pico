@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader, Sparkles, Wrench, CheckCircle, XCircle } from 'lucide-react';
+import { Send, Loader, Sparkles, Wrench, CheckCircle, XCircle, ChevronDown, ChevronUp, Clock, Zap, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import './ChatPanel.css';
@@ -11,8 +11,16 @@ function ChatPanel({ onChatAction }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingSteps, setThinkingSteps] = useState([]);
+  const [expandedProfiling, setExpandedProfiling] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  const toggleProfiling = (index) => {
+    setExpandedProfiling(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -70,6 +78,7 @@ function ChatPanel({ onChatAction }) {
       const decoder = new TextDecoder();
       let assistantResponse = '';
       let metadata = {};
+      let profiling = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -113,6 +122,7 @@ function ChatPanel({ onChatAction }) {
               
               case 'done':
                 metadata = data.metadata || {};
+                profiling = data.profiling || null;
                 break;
               
               case 'error':
@@ -128,9 +138,11 @@ function ChatPanel({ onChatAction }) {
 
       // Add assistant message if there's content
       if (assistantResponse && assistantResponse.trim()) {
+        console.log('Profiling data received:', profiling);
         setMessages([...newMessages, {
           role: 'assistant',
           content: assistantResponse,
+          profiling: profiling,
         }]);
       }
 
@@ -187,6 +199,99 @@ function ChatPanel({ onChatAction }) {
                 msg.content
               )}
             </div>
+            {msg.role === 'assistant' && (() => {
+              console.log('Message profiling check:', {
+                hasRole: msg.role === 'assistant',
+                hasProfiling: !!msg.profiling,
+                hasTimeline: msg.profiling?.timeline ? true : false,
+                profiling: msg.profiling
+              });
+              return msg.profiling && msg.profiling.timeline;
+            })() && (
+              <div className="profiling-section">
+                <button 
+                  className="profiling-toggle"
+                  onClick={() => toggleProfiling(idx)}
+                >
+                  <Activity size={12} />
+                  <span>Performance details</span>
+                  {expandedProfiling[idx] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                
+                {expandedProfiling[idx] && (
+                  <div className="profiling-details">
+                    <div className="profiling-summary">
+                      <div className="profiling-stat">
+                        <Clock size={14} />
+                        <span className="stat-label">Total Duration</span>
+                        <span className="stat-value">{msg.profiling.total_duration_ms}ms</span>
+                      </div>
+                      <div className="profiling-stat">
+                        <Zap size={14} />
+                        <span className="stat-label">LLM Calls</span>
+                        <span className="stat-value">
+                          {msg.profiling.timeline.filter(c => c.type === 'llm').length}
+                        </span>
+                      </div>
+                      <div className="profiling-stat">
+                        <Wrench size={14} />
+                        <span className="stat-label">Tool Calls</span>
+                        <span className="stat-value">
+                          {msg.profiling.timeline.filter(c => c.type === 'tool').length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="profiling-tokens">
+                      <div className="token-stat">
+                        <span className="token-label">Input Tokens</span>
+                        <span className="token-value">{msg.profiling.total_input_tokens.toLocaleString()}</span>
+                      </div>
+                      <div className="token-stat">
+                        <span className="token-label">Output Tokens</span>
+                        <span className="token-value">{msg.profiling.total_output_tokens.toLocaleString()}</span>
+                      </div>
+                      <div className="token-stat total">
+                        <span className="token-label">Total</span>
+                        <span className="token-value">
+                          {(msg.profiling.total_input_tokens + msg.profiling.total_output_tokens).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {msg.profiling.timeline.length > 0 && (
+                      <div className="profiling-breakdown">
+                        <div className="breakdown-title">Call Timeline</div>
+                        {msg.profiling.timeline.map((call, i) => (
+                          <div key={i} className={`breakdown-item ${call.type}`}>
+                            <span className="item-sequence">#{call.sequence}</span>
+                            {call.type === 'llm' ? (
+                              <>
+                                <Zap size={12} className="item-icon" />
+                                <span className="item-label">LLM (iter {call.iteration})</span>
+                                <span className="item-value">{call.duration_ms}ms</span>
+                                <span className="item-tokens">
+                                  {call.input_tokens} in / {call.output_tokens} out
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <Wrench size={12} className="item-icon" />
+                                <span className="item-label">{call.tool}</span>
+                                <span className="item-value">{call.duration_ms}ms</span>
+                                <span className={`item-status ${call.success ? 'success' : 'error'}`}>
+                                  {call.success ? '✓' : '✗'}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
         {isLoading && (
