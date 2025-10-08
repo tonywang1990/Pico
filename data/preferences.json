@@ -1,0 +1,13 @@
+{
+  "general": [
+    "User prefers concise and helpful responses",
+    "User likes proactive suggestions"
+  ],
+  "notes_plugin": [
+    "User prefers structured notes with clear headings and bullet points"
+  ],
+  "todos_plugin": [
+    "User prefers todos ordered by priority (high, medium, low) with related tasks grouped together logically (e.g., all integrations grouped, all UI/UX improvements grouped)",
+    "User prefers to code low priority tasks as green"
+  ]
+}

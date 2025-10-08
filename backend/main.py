@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Import our MCP architecture
@@ -11,6 +12,36 @@ from pico_agent import PicoAgent
 from mcp_protocol import MCPClient
 
 load_dotenv()
+
+# Get absolute paths relative to project root with validation
+def get_project_root() -> Path:
+    """
+    Get project root directory with validation.
+    Looks for marker files to confirm we found the right directory.
+    """
+    # Start from this file's directory
+    current = Path(__file__).resolve().parent
+    
+    # Go up to find project root (look for setup.sh or README.md as markers)
+    for parent in [current, current.parent, current.parent.parent]:
+        if (parent / "setup.sh").exists() and (parent / "README.md").exists():
+            return parent
+    
+    # If we can't find the project root, raise an exception
+    raise RuntimeError("Could not determine project root directory. Please ensure 'setup.sh' and 'README.md' exist in the project root.")
+
+PROJECT_ROOT = get_project_root()
+DATA_DIR = PROJECT_ROOT / "data"
+NOTES_DIR = DATA_DIR / "notes"
+TODOS_FILE = DATA_DIR / "todos.json"
+PREFERENCES_FILE = DATA_DIR / "preferences.json"
+
+# Ensure data directories exist
+DATA_DIR.mkdir(exist_ok=True)
+NOTES_DIR.mkdir(exist_ok=True)
+
+print(f"📁 Project root: {PROJECT_ROOT}")
+print(f"📁 Data directory: {DATA_DIR}")
 
 app = FastAPI(title="Pico - Personal Assistant")
 
@@ -23,14 +54,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize plugin servers (MCP Servers)
-note_plugin = NotePlugin("data/notes")
+# Initialize plugin servers (MCP Servers) with absolute paths
+note_plugin = NotePlugin(str(NOTES_DIR))
 todo_plugin = TodoPlugin(
-    todos_file="data/todos.json",
+    todos_file=str(TODOS_FILE),
     anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")  # For AI-based search
 )
 preference_plugin = PreferencePlugin(
-    preferences_file="data/preferences.json",
+    preferences_file=str(PREFERENCES_FILE),
     anthropic_api_key=os.getenv("ANTHROPIC_API_KEY")  # For AI-based preference merging
 )
 

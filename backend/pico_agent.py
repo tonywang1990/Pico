@@ -51,14 +51,18 @@ When users ask you to DO something with their data, you MUST use tools to make c
 - "Add a todo" → use create_todo tool
 - "Update the appointment" → search_todos to find it, then use update_todo tool  
 - "Mark X as done" → search_todos to find it, then use complete_todo tool
+- "Delete/Remove X" → search_todos to find it, then use delete_todo tool
 - "Create a note" → use create_note tool
 - "Add a time to X" → search_todos to find it, then use update_todo tool to modify the text
 - "Change priority of X" → search_todos to find it, then use update_todo tool
 
-**WORKFLOW FOR MODIFICATIONS**: When users want to modify/update an existing item:
+**WORKFLOW FOR MODIFICATIONS**: When users want to modify/update/delete an existing item:
 1. First use search_todos or search_notes to find the item by keywords
 2. Get the item's ID from the search results
-3. Then call the update/complete tool with that ID
+3. Then call the appropriate tool with that ID:
+   - update_todo / update_note - to modify content
+   - complete_todo - to mark as done
+   - delete_todo - to remove permanently
 
 NEVER just respond with "I've updated..." without actually calling the tool. The user expects you to make real changes to their data.
 

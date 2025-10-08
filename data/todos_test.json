@@ -1,0 +1,333 @@
+[
+  {
+    "id": "todo-1759643919556853000",
+    "text": "Move preference updates to async (not blocking response)",
+    "completed": true,
+    "priority": "high",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.556857"
+  },
+  {
+    "id": "todo-1759643919565608000",
+    "text": "Add planning step to Pico chat - create checklist then execute",
+    "completed": true,
+    "priority": "high",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.565615"
+  },
+  {
+    "id": "todo-1759643919576066000",
+    "text": "Integrate internet search MCP tool",
+    "completed": true,
+    "priority": "high",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.576070"
+  },
+  {
+    "id": "todo-1759643919578075000",
+    "text": "Add browse and read information capability",
+    "completed": true,
+    "priority": "high",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.578078"
+  },
+  {
+    "id": "todo-1759643919579813000",
+    "text": "Make chat focus on currently open notes",
+    "completed": true,
+    "priority": "high",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.579815"
+  },
+  {
+    "id": "todo-1759643919580891000",
+    "text": "Explore deep research capability through API",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.580893"
+  },
+  {
+    "id": "todo-1759643919582119000",
+    "text": "Integrate iMessage connection",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.582121"
+  },
+  {
+    "id": "todo-1759643919583483000",
+    "text": "Integrate Gmail connection",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.583484"
+  },
+  {
+    "id": "todo-1759643919584456000",
+    "text": "Integrate Google Calendar connection",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.584457"
+  },
+  {
+    "id": "todo-1759643919586709000",
+    "text": "Add drag and drop to reorder tabs",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.586711"
+  },
+  {
+    "id": "todo-1759643919593254000",
+    "text": "Add visual indicator for saved notes",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.593256"
+  },
+  {
+    "id": "todo-1759643919587917000",
+    "text": "Improve tab contrast",
+    "completed": true,
+    "priority": "low",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.587918"
+  },
+  {
+    "id": "todo-1759632512004",
+    "text": "Share 50 results with Tony (from Sep 11)",
+    "completed": true,
+    "priority": "high",
+    "due_date": "2025-10-05",
+    "created_at": "2025-10-04T19:48:32.206823"
+  },
+  {
+    "id": "todo-1759632512003",
+    "text": "Schedule alignment meeting with Tony/Miriam on AI Emote for Sticker",
+    "completed": true,
+    "priority": "high",
+    "due_date": "2025-10-08",
+    "created_at": "2025-10-04T19:48:32.202893"
+  },
+  {
+    "id": "1759634462896",
+    "text": "review stratecy",
+    "completed": true,
+    "priority": "medium",
+    "due_date": "2025-10-06",
+    "created_at": "2025-10-05T03:21:02.896Z"
+  },
+  {
+    "id": "todo-1759632512006",
+    "text": "Finalize H2 test plan - determine content types and surfaces",
+    "completed": true,
+    "priority": "medium",
+    "due_date": "2025-10-11",
+    "created_at": "2025-10-04T19:48:32.215916"
+  },
+  {
+    "id": "todo-1759632512005",
+    "text": "Complete GenAI Sticker Master Doc capability section",
+    "completed": true,
+    "priority": "medium",
+    "due_date": "2025-10-12",
+    "created_at": "2025-10-04T19:48:32.210521"
+  },
+  {
+    "id": "todo-1759635048126088000",
+    "text": "check my review doc tomorrow",
+    "completed": true,
+    "priority": "low",
+    "due_date": "2025-10-05",
+    "created_at": "2025-10-04T20:30:48.126089"
+  },
+  {
+    "id": "todo-1759632512001",
+    "text": "Review Emotes Strategy Refresh draft (scheduled 9/10)",
+    "completed": true,
+    "priority": "low",
+    "due_date": "2025-10-10",
+    "created_at": "2025-10-04T19:48:32.186820"
+  },
+  {
+    "id": "todo-1759632512002",
+    "text": "Check AI Emote Video Catalog progress",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T19:48:32.196522"
+  },
+  {
+    "id": "todo-1759643919585521000",
+    "text": "Enable tab renaming functionality",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.585523"
+  },
+  {
+    "id": "todo-1759643919594356000",
+    "text": "Add strikethrough formatting option",
+    "completed": true,
+    "priority": "low",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.594358"
+  },
+  {
+    "id": "todo-1759643919595296000",
+    "text": "Implement dark mode",
+    "completed": true,
+    "priority": "medium",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.595298"
+  },
+  {
+    "id": "todo-1759643919596678000",
+    "text": "Add horizontal resize for todo and chat windows",
+    "completed": true,
+    "priority": "low",
+    "due_date": null,
+    "created_at": "2025-10-04T22:58:39.596679"
+  },
+  {
+    "id": "todo-1759808147506196000",
+    "text": "Review quarterly budget report",
+    "completed": false,
+    "priority": "medium",
+    "due_date": "2025-10-07",
+    "tags": [
+      "finance",
+      "review"
+    ],
+    "created_at": "2025-10-06T20:35:47.506197"
+  },
+  {
+    "id": "todo-1759808147507198000",
+    "text": "Schedule dentist appointment",
+    "completed": false,
+    "priority": "low",
+    "due_date": "2025-10-08",
+    "tags": [
+      "personal",
+      "health"
+    ],
+    "created_at": "2025-10-06T20:35:47.507199"
+  },
+  {
+    "id": "todo-1759808147508681000",
+    "text": "Prepare presentation for team meeting",
+    "completed": false,
+    "priority": "high",
+    "due_date": "2025-10-09",
+    "tags": [
+      "work",
+      "presentation",
+      "meeting"
+    ],
+    "created_at": "2025-10-06T20:35:47.508683"
+  },
+  {
+    "id": "todo-1759808147509760000",
+    "text": "Update project documentation",
+    "completed": false,
+    "priority": "medium",
+    "due_date": "2025-10-10",
+    "tags": [
+      "work",
+      "documentation"
+    ],
+    "created_at": "2025-10-06T20:35:47.509761"
+  },
+  {
+    "id": "todo-1759808147511766000",
+    "text": "Call insurance company about renewal",
+    "completed": false,
+    "priority": "high",
+    "due_date": "2025-10-11",
+    "tags": [
+      "personal",
+      "admin",
+      "urgent"
+    ],
+    "created_at": "2025-10-06T20:35:47.511768"
+  },
+  {
+    "id": "todo-1759808147513113000",
+    "text": "Research new marketing tools @ 1pm",
+    "completed": false,
+    "priority": "low",
+    "due_date": "2025-10-13",
+    "tags": [
+      "work",
+      "research",
+      "marketing"
+    ],
+    "created_at": "2025-10-06T20:35:47.513115"
+  },
+  {
+    "id": "todo-1759808147515389000",
+    "text": "Submit expense reports",
+    "completed": false,
+    "priority": "medium",
+    "due_date": "2025-10-15",
+    "tags": [
+      "work",
+      "finance",
+      "admin"
+    ],
+    "created_at": "2025-10-06T20:35:47.515391"
+  },
+  {
+    "id": "todo-1759808147517080000",
+    "text": "Organize team building event",
+    "completed": false,
+    "priority": "medium",
+    "due_date": "2025-10-17",
+    "tags": [
+      "work",
+      "planning",
+      "team"
+    ],
+    "created_at": "2025-10-06T20:35:47.517081"
+  },
+  {
+    "id": "todo-1759810416100360000",
+    "text": "Fake todo for testing",
+    "completed": false,
+    "priority": "medium",
+    "due_date": "2025-10-06",
+    "tags": [
+      "testing"
+    ],
+    "created_at": "2025-10-06T21:13:36.100362"
+  },
+  {
+    "id": "todo-1759811624017027000",
+    "text": "see dental doc",
+    "completed": false,
+    "priority": "medium",
+    "due_date": null,
+    "tags": [],
+    "created_at": "2025-10-06T21:33:44.017030"
+  },
+  {
+    "id": "todo-1759811663006471000",
+    "text": "see dental doc @ 1pm",
+    "completed": false,
+    "priority": "medium",
+    "due_date": "2025-10-12",
+    "tags": [],
+    "created_at": "2025-10-06T21:34:23.006474"
+  },
+  {
+    "id": "todo-1759811805634992000",
+    "text": "See doctor for dental @ 2pm",
+    "completed": false,
+    "priority": "medium",
+    "due_date": "2025-10-14",
+    "tags": [],
+    "created_at": "2025-10-06T21:36:45.634994"
+  }
+]

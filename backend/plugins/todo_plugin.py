@@ -77,22 +77,28 @@ class TodoPlugin(Plugin, MCPServer):
                 return todo
         return None
     
-    def search(self, query: str) -> List[Dict[str, Any]]:
-        """Search todos using LLM for intelligent matching"""
+    def search(self, query: str) -> List[str]:
+        """Search todos using LLM for intelligent matching - returns list of todo IDs"""
         todos = self.get_all()
         
         if not todos:
             return []
         
+        # If query is empty or just whitespace, return all todo IDs
+        if not query or not query.strip():
+            logger.info("Empty query - returning all todo IDs")
+            return [todo['id'] for todo in todos]
+        
         # If no API key, fall back to simple search
         if not self.anthropic_api_key:
             logger.warning("No Anthropic API key, using simple text search")
             query_lower = query.lower()
-            return [todo for todo in todos if query_lower in todo['text'].lower()]
+            matched = [todo for todo in todos if query_lower in todo['text'].lower()]
+            return [todo['id'] for todo in matched]
         
         try:
             # Prepare prompt for LLM
-            prompt = f"""You are helping search through a todo list. Given a search query and a list of todos, return ONLY the todos that match the search.
+            prompt = f"""You are helping search through a todo list. Given a search query and a list of todos, return ONLY the IDs of matching todos.
 
 SEARCH QUERY: "{query}"
 
@@ -102,28 +108,29 @@ ALL TODOS:
 INSTRUCTIONS:
 1. Find todos that match the search query
 2. Match by: text content, tags, due dates (handle different date formats like "10/17" = "Oct 17" = "2025-10-17")
-3. Return ONLY a JSON array of the matching todos (exact same format as input)
+3. Return ONLY a JSON array of the matching todo IDs (strings)
 4. Return empty array [] if no matches
-5. Do NOT include any explanation, just the JSON array
+5. Do NOT include any explanation, just the JSON array of IDs
 
-Output format: [{{...todo1...}}, {{...todo2...}}]"""
+Output format: ["todo-123", "todo-456", "todo-789"]"""
 
             results = call_llm_for_json(
                 api_key=self.anthropic_api_key,
                 model="claude-sonnet-4-5-20250929",
                 prompt=prompt,
-                max_tokens=4096,
+                max_tokens=2048,  # Reduced since we're only returning IDs
                 operation_name=f"Todo search for '{query}'"
             )
             
-            logger.info(f"🔍 Found {len(results)} results")
+            logger.info(f"🔍 Found {len(results)} matching todo IDs")
             return results
             
         except Exception as e:
             logger.error(f"Error in LLM search: {e}")
             # Fallback to simple text search
             query_lower = query.lower()
-            return [todo for todo in todos if query_lower in todo['text'].lower()]
+            matched = [todo for todo in todos if query_lower in todo['text'].lower()]
+            return [todo['id'] for todo in matched]
     
     def _parse_priority(self, text: str) -> str:
         """Extract priority from text (high/medium/low)"""
@@ -309,12 +316,23 @@ Output format: [{{...todo1...}}, {{...todo2...}}]"""
                 required=["todo_id"]
             ),
             create_tool(
+                name="delete_todo",
+                description="Delete a todo permanently. Use this when user wants to remove a todo entirely (not just complete it).",
+                parameters={
+                    "todo_id": {
+                        "type": "string",
+                        "description": "ID of the todo to delete"
+                    }
+                },
+                required=["todo_id"]
+            ),
+            create_tool(
                 name="search_todos",
-                description="Search todos by text, tags, or due date. Supports flexible matching - can search by keywords, partial dates (e.g., '10/17', 'Oct 17'), or tags. Returns matching todos with their full information including IDs for updates.",
+                description="Search todos by text, tags, or due date. Returns only the IDs of matching todos. Use empty string to get all todo IDs. After getting IDs, you can use get_preferences or read the 'Todo List' resource to see full details.",
                 parameters={
                     "query": {
                         "type": "string",
-                        "description": "Search query - can be keywords from todo text, tag names, or dates in various formats (e.g., 'dentist', 'work', '10/17', 'Oct 17')"
+                        "description": "Search query - can be keywords from todo text, tag names, or dates in various formats (e.g., 'dentist', 'work', '10/17', 'Oct 17'). Use empty string '' to get all todos."
                     }
                 },
                 required=["query"]
@@ -341,6 +359,9 @@ Output format: [{{...todo1...}}, {{...todo2...}}]"""
             return self.update(todo_id, **arguments)
         elif tool_name == "complete_todo":
             return self.update(arguments["todo_id"], completed=True)
+        elif tool_name == "delete_todo":
+            success = self.delete(arguments["todo_id"])
+            return {"success": success, "id": arguments["todo_id"]}
         elif tool_name == "search_todos":
             return self.search(arguments["query"])
         elif tool_name == "reorder_todos":
