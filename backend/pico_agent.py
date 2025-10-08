@@ -2,7 +2,7 @@
 Pico Agent - The main AI assistant that interacts with plugins via MCP
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Generator
 import anthropic
 import json
 import logging
@@ -326,3 +326,114 @@ Format your responses using Markdown for better readability (headings, lists, bo
         """List all available tool names"""
         tools = self.mcp_client.discover_all_tools()
         return [tool.name for tool in tools]
+    
+    def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        include_plugin_data: bool = True,
+        max_tokens: int = 2048,
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Process a chat message and yield events showing the thinking process.
+        
+        Yields events:
+        - {"type": "thinking"} - Agent is thinking
+        - {"type": "tool_call", "tool": str, "args": dict} - Tool being called
+        - {"type": "tool_result", "tool": str, "success": bool, "result": any} - Tool result
+        - {"type": "response", "text": str} - Final response text
+        - {"type": "done", "metadata": dict} - Completion with metadata
+        """
+        # Setup
+        user_query = messages[-1]["content"] if messages else "No message"
+        logger.info(f"=== New streaming chat session ===")
+        logger.info(f"User query: {user_query[:100]}...")
+        
+        yield {"type": "thinking"}
+        
+        system_message = self._build_system_message(include_plugin_data)
+        tools = self.mcp_client.get_tools_for_claude()
+        
+        # Track all actions
+        actions_metadata = {}
+        
+        # Agentic loop configuration
+        iteration = 0
+        max_iterations = 10
+        
+        try:
+            # Agentic loop
+            response = self._call_claude(system_message, messages, tools, max_tokens)
+            
+            while response.stop_reason == "tool_use" and iteration < max_iterations:
+                iteration += 1
+                logger.info(f"🔧 Iteration {iteration}: Tool use requested")
+                
+                # Process tool calls and yield events
+                tool_results = []
+                for block in response.content:
+                    if block.type == "tool_use":
+                        # Yield tool call event
+                        yield {
+                            "type": "tool_call",
+                            "tool": block.name,
+                            "args": block.input
+                        }
+                        
+                        # Execute tool
+                        tool_result = self._execute_tool(block.name, block.input, block.id)
+                        
+                        # Track successful actions
+                        if tool_result["success"] and tool_result["result"]:
+                            self._track_action_metadata(
+                                block.name, tool_result["result"], actions_metadata
+                            )
+                        
+                        # Yield tool result event
+                        yield {
+                            "type": "tool_result",
+                            "tool": block.name,
+                            "success": tool_result["success"],
+                            "result": tool_result.get("result"),
+                            "error": tool_result.get("content") if tool_result.get("is_error") else None
+                        }
+                        
+                        # Add to results for Claude
+                        tool_results.append({
+                            "type": tool_result["type"],
+                            "tool_use_id": tool_result["tool_use_id"],
+                            "content": tool_result["content"],
+                            **({"is_error": True} if tool_result.get("is_error") else {}),
+                        })
+                
+                # Append to conversation
+                messages.append({"role": "assistant", "content": response.content})
+                messages.append({"role": "user", "content": tool_results})
+                
+                # Show thinking again
+                yield {"type": "thinking"}
+                
+                # Get next response
+                response = self._call_claude(system_message, messages, tools, max_tokens)
+            
+            # Extract final response
+            response_text = self._extract_text_from_response(response.content)
+            
+            # Yield final response
+            yield {
+                "type": "response",
+                "text": response_text
+            }
+            
+            # Yield completion
+            yield {
+                "type": "done",
+                "metadata": actions_metadata,
+                "iterations": iteration
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in streaming chat: {str(e)}")
+            yield {
+                "type": "error",
+                "error": str(e)
+            }
