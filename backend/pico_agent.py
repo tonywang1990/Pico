@@ -6,6 +6,7 @@ from typing import List, Dict, Any, Generator
 import anthropic
 import json
 import logging
+import time
 from mcp_protocol import MCPClient, MCPServer
 from datetime import datetime
 
@@ -327,6 +328,120 @@ Format your responses using Markdown for better readability (headings, lists, bo
         tools = self.mcp_client.discover_all_tools()
         return [tool.name for tool in tools]
     
+    def _track_llm_call(
+        self, 
+        response: Any, 
+        duration_ms: float, 
+        profiling_data: Dict[str, Any], 
+        call_sequence: int, 
+        iteration: int
+    ) -> None:
+        """Track an LLM call in profiling timeline"""
+        profiling_data["timeline"].append({
+            "type": "llm",
+            "sequence": call_sequence,
+            "iteration": iteration,
+            "duration_ms": round(duration_ms, 2),
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        })
+        profiling_data["total_input_tokens"] += response.usage.input_tokens
+        profiling_data["total_output_tokens"] += response.usage.output_tokens
+
+    def _call_claude_with_profiling(
+        self,
+        system_message: str,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        max_tokens: int,
+        profiling_data: Dict[str, Any],
+        call_sequence: int,
+        iteration: int
+    ) -> tuple[Any, float]:
+        """Make a Claude API call and track timing. Returns (response, duration_ms)"""
+        start_time = time.time()
+        response = self._call_claude(system_message, messages, tools, max_tokens)
+        duration_ms = (time.time() - start_time) * 1000
+        
+        self._track_llm_call(response, duration_ms, profiling_data, call_sequence, iteration)
+        return response, duration_ms
+
+    def _process_tool_calls_streaming(
+        self,
+        response_content: List[Any],
+        actions_metadata: Dict[str, Any],
+        profiling_data: Dict[str, Any],
+        call_sequence: int,
+        iteration: int
+    ) -> Generator[Dict[str, Any], None, tuple[List[Dict[str, Any]], int]]:
+        """
+        Process tool calls and yield events. Returns (tool_results, updated_call_sequence).
+        
+        Yields:
+        - Tool call events
+        - Tool result events
+        """
+        tool_results = []
+        
+        for block in response_content:
+            if block.type == "tool_use":
+                # Yield tool call event
+                yield {
+                    "type": "tool_call",
+                    "tool": block.name,
+                    "args": block.input
+                }
+                
+                # Execute tool with timing
+                tool_start = time.time()
+                tool_result = self._execute_tool(block.name, block.input, block.id)
+                tool_duration = (time.time() - tool_start) * 1000
+                call_sequence += 1
+                
+                # Track tool call in timeline
+                profiling_data["timeline"].append({
+                    "type": "tool",
+                    "sequence": call_sequence,
+                    "iteration": iteration,
+                    "tool": block.name,
+                    "duration_ms": round(tool_duration, 2),
+                    "success": tool_result["success"]
+                })
+                
+                # Track successful actions
+                if tool_result["success"] and tool_result["result"]:
+                    self._track_action_metadata(
+                        block.name, tool_result["result"], actions_metadata
+                    )
+                
+                # Yield tool result event
+                yield {
+                    "type": "tool_result",
+                    "tool": block.name,
+                    "success": tool_result["success"],
+                    "result": tool_result.get("result"),
+                    "error": tool_result.get("content") if tool_result.get("is_error") else None
+                }
+                
+                # Add to results for Claude
+                tool_results.append({
+                    "type": tool_result["type"],
+                    "tool_use_id": tool_result["tool_use_id"],
+                    "content": tool_result["content"],
+                    **({"is_error": True} if tool_result.get("is_error") else {}),
+                })
+        
+        return tool_results, call_sequence
+
+    def _log_profiling_summary(self, profiling_data: Dict[str, Any]) -> None:
+        """Log a summary of profiling data"""
+        llm_count = sum(1 for call in profiling_data['timeline'] if call['type'] == 'llm')
+        tool_count = sum(1 for call in profiling_data['timeline'] if call['type'] == 'tool')
+        logger.info(f"📊 Session completed in {profiling_data['total_duration_ms']}ms")
+        logger.info(f"   LLM calls: {llm_count}")
+        logger.info(f"   Tool calls: {tool_count}")
+        logger.info(f"   Total tokens: {profiling_data['total_input_tokens']} in + {profiling_data['total_output_tokens']} out")
+
     def chat_stream(
         self,
         messages: List[Dict[str, str]],
@@ -341,9 +456,10 @@ Format your responses using Markdown for better readability (headings, lists, bo
         - {"type": "tool_call", "tool": str, "args": dict} - Tool being called
         - {"type": "tool_result", "tool": str, "success": bool, "result": any} - Tool result
         - {"type": "response", "text": str} - Final response text
-        - {"type": "done", "metadata": dict} - Completion with metadata
+        - {"type": "done", "metadata": dict, "profiling": dict} - Completion with metadata
         """
         # Setup
+        session_start = time.time()
         user_query = messages[-1]["content"] if messages else "No message"
         logger.info(f"=== New streaming chat session ===")
         logger.info(f"User query: {user_query[:100]}...")
@@ -353,57 +469,38 @@ Format your responses using Markdown for better readability (headings, lists, bo
         system_message = self._build_system_message(include_plugin_data)
         tools = self.mcp_client.get_tools_for_claude()
         
-        # Track all actions
+        # Track all actions and profiling
         actions_metadata = {}
+        profiling_data = {
+            "timeline": [],
+            "total_duration_ms": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+        }
+        call_sequence = 0
         
         # Agentic loop configuration
         iteration = 0
         max_iterations = 10
         
         try:
-            # Agentic loop
-            response = self._call_claude(system_message, messages, tools, max_tokens)
+            # Initial Claude call
+            response, _ = self._call_claude_with_profiling(
+                system_message, messages, tools, max_tokens, 
+                profiling_data, call_sequence + 1, iteration
+            )
+            call_sequence += 1
             
+            # Agentic loop
             while response.stop_reason == "tool_use" and iteration < max_iterations:
                 iteration += 1
                 logger.info(f"🔧 Iteration {iteration}: Tool use requested")
                 
                 # Process tool calls and yield events
-                tool_results = []
-                for block in response.content:
-                    if block.type == "tool_use":
-                        # Yield tool call event
-                        yield {
-                            "type": "tool_call",
-                            "tool": block.name,
-                            "args": block.input
-                        }
-                        
-                        # Execute tool
-                        tool_result = self._execute_tool(block.name, block.input, block.id)
-                        
-                        # Track successful actions
-                        if tool_result["success"] and tool_result["result"]:
-                            self._track_action_metadata(
-                                block.name, tool_result["result"], actions_metadata
-                            )
-                        
-                        # Yield tool result event
-                        yield {
-                            "type": "tool_result",
-                            "tool": block.name,
-                            "success": tool_result["success"],
-                            "result": tool_result.get("result"),
-                            "error": tool_result.get("content") if tool_result.get("is_error") else None
-                        }
-                        
-                        # Add to results for Claude
-                        tool_results.append({
-                            "type": tool_result["type"],
-                            "tool_use_id": tool_result["tool_use_id"],
-                            "content": tool_result["content"],
-                            **({"is_error": True} if tool_result.get("is_error") else {}),
-                        })
+                tool_results, call_sequence = yield from self._process_tool_calls_streaming(
+                    response.content, actions_metadata, profiling_data, 
+                    call_sequence, iteration
+                )
                 
                 # Append to conversation
                 messages.append({"role": "assistant", "content": response.content})
@@ -413,27 +510,32 @@ Format your responses using Markdown for better readability (headings, lists, bo
                 yield {"type": "thinking"}
                 
                 # Get next response
-                response = self._call_claude(system_message, messages, tools, max_tokens)
+                response, _ = self._call_claude_with_profiling(
+                    system_message, messages, tools, max_tokens,
+                    profiling_data, call_sequence + 1, iteration
+                )
+                call_sequence += 1
             
             # Extract final response
             response_text = self._extract_text_from_response(response.content)
             
-            # Yield final response
-            yield {
-                "type": "response",
-                "text": response_text
-            }
+            # Calculate total duration
+            profiling_data["total_duration_ms"] = round((time.time() - session_start) * 1000, 2)
             
-            # Yield completion
+            # Yield final response
+            yield {"type": "response", "text": response_text}
+            
+            # Yield completion with profiling data
             yield {
                 "type": "done",
                 "metadata": actions_metadata,
-                "iterations": iteration
+                "iterations": iteration,
+                "profiling": profiling_data
             }
+            
+            # Log profiling summary
+            self._log_profiling_summary(profiling_data)
             
         except Exception as e:
             logger.error(f"Error in streaming chat: {str(e)}")
-            yield {
-                "type": "error",
-                "error": str(e)
-            }
+            yield {"type": "error", "error": str(e)}
