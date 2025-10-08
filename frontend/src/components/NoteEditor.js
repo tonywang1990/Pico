@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, FolderOpen, Bold, Italic, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Edit2, Moon, Sun } from 'lucide-react';
+import { Plus, X, FolderOpen, Bold, Italic, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Edit2, Moon, Sun, CheckSquare } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Typography from '@tiptap/extension-typography';
 import Link from '@tiptap/extension-link';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import './NoteEditor.css';
 
 function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, onCloseTab, onUpdateNote, onUpdateTitle, onLoadNote, darkMode, onToggleDarkMode }) {
@@ -34,6 +36,13 @@ function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, on
           class: 'note-link',
         },
       }),
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+        HTMLAttributes: {
+          class: 'task-item',
+        },
+      }),
     ],
     content: '',
     onUpdate: ({ editor }) => {
@@ -45,6 +54,33 @@ function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, on
     editorProps: {
       attributes: {
         class: 'tiptap-editor-content',
+      },
+      handleKeyDown: (view, event) => {
+        // Handle Tab for indentation in task lists
+        if (event.key === 'Tab' && !event.shiftKey) {
+          const { state } = view;
+          const { $from } = state.selection;
+          
+          // Check if we're in a task list
+          if ($from.parent.type.name === 'taskItem') {
+            event.preventDefault();
+            return editor.commands.sinkListItem('taskItem');
+          }
+        }
+        
+        // Handle Shift+Tab for outdentation in task lists
+        if (event.key === 'Tab' && event.shiftKey) {
+          const { state } = view;
+          const { $from } = state.selection;
+          
+          // Check if we're in a task list
+          if ($from.parent.type.name === 'taskItem') {
+            event.preventDefault();
+            return editor.commands.liftListItem('taskItem');
+          }
+        }
+        
+        return false;
       },
       handlePaste: (view, event, slice) => {
         const text = event.clipboardData?.getData('text/plain');
@@ -352,6 +388,13 @@ function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, on
           title="Numbered List"
         >
           <ListOrdered size={18} />
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          className={editor.isActive('taskList') ? 'is-active' : ''}
+          title="Checklist"
+        >
+          <CheckSquare size={18} />
         </button>
       </div>
 
