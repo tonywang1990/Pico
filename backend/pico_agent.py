@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 import anthropic
 import json
 import logging
+import time
 from mcp_protocol import MCPClient, MCPServer
 from datetime import datetime
 
@@ -149,11 +150,14 @@ Be concise and use Markdown formatting."""
         Process all tool calls in a response and return tool results.
         Note: server_tool_use blocks (like web_search) are automatically handled by the API.
         """
+        start_time = time.time()
         tool_results = []
+        tool_count = 0
 
         for block in response_content:
             if block.type == "tool_use":
                 # MCP plugin tools - we execute these
+                tool_count += 1
                 tool_result = self._execute_tool(block.name, block.input, block.id)
 
                 # Track successful actions
@@ -179,6 +183,11 @@ Be concise and use Markdown formatting."""
                 if tool_input:
                     logger.info(f"   Input: {tool_input}")
 
+        # Log tool processing performance
+        if tool_count > 0:
+            latency_ms = (time.time() - start_time) * 1000
+            logger.info(f"⚡ Processed {tool_count} tool call(s) in {latency_ms:.0f}ms")
+
         return tool_results
 
     def _extract_text_from_response(self, response_content: List[Any]) -> str:
@@ -191,13 +200,25 @@ Be concise and use Markdown formatting."""
     
     def _call_claude(self, system_message: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], max_tokens: int) -> Any:
         """Make a Claude API call - extracted for DRY principle"""
-        return self.client.messages.create(
+        start_time = time.time()
+        
+        response = self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
             system=system_message,
             messages=messages,
             tools=tools if tools else None,
         )
+        
+        # Calculate latency
+        latency_ms = (time.time() - start_time) * 1000
+        
+        # Log performance metrics
+        logger.info(f"⚡ Claude API call completed in {latency_ms:.0f}ms")
+        logger.info(f"📊 Tokens - Input: {response.usage.input_tokens:,} | Output: {response.usage.output_tokens:,}")
+        logger.info(f"🔄 Stop reason: {response.stop_reason}")
+        
+        return response
 
     def chat(
         self,
@@ -237,7 +258,6 @@ Be concise and use Markdown formatting."""
             while iteration < max_iterations:
                 # Call Claude
                 response = self._call_claude(system_message, messages, tools, max_tokens)
-                logger.info(f"Claude response stop_reason: {response.stop_reason}")
 
                 # Check if Claude wants to use tools
                 if response.stop_reason == "tool_use":

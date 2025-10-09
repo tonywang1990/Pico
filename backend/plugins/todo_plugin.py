@@ -6,9 +6,11 @@ import os
 import json
 import time
 import logging
-from typing import List, Dict, Any, Optional
+import re
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from dateutil import parser as date_parser
+from difflib import SequenceMatcher
 from mcp.types import Tool, Resource
 from mcp_protocol import MCPServer, create_tool, create_resource
 from .base import Plugin
@@ -77,60 +79,96 @@ class TodoPlugin(Plugin, MCPServer):
                 return todo
         return None
     
-    def search(self, query: str) -> List[str]:
-        """Search todos using LLM for intelligent matching - returns list of todo IDs"""
+    def _parse_date_query(self, query: str) -> Optional[str]:
+        """
+        Try to parse date from query and convert to YYYY-MM-DD format.
+        Handles: "today", "tomorrow", "Oct 9", "10/9", "next Monday", etc.
+        """
+        query_lower = query.lower().strip()
+        today = datetime.now().date()
+        
+        # Handle relative dates
+        if query_lower == "today":
+            return today.strftime("%Y-%m-%d")
+        elif query_lower == "tomorrow":
+            return (today + timedelta(days=1)).strftime("%Y-%m-%d")
+        elif query_lower == "yesterday":
+            return (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        # Try parsing with dateutil
+        try:
+            parsed_date = date_parser.parse(query, fuzzy=True).date()
+            return parsed_date.strftime("%Y-%m-%d")
+        except:
+            return None
+    
+    def _fuzzy_match_score(self, query: str, text: str) -> float:
+        """Calculate fuzzy match score between query and text (0-1)"""
+        return SequenceMatcher(None, query.lower(), text.lower()).ratio()
+    
+    def search(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Search todos using fuzzy string matching.
+        Searches across text, tags, and due_date fields.
+        Returns list of todo objects sorted by relevance.
+        """
         todos = self.get_all()
         
         if not todos:
             return []
         
-        # If query is empty or just whitespace, return all todo IDs
+        # If query is empty or just whitespace, return all todos
         if not query or not query.strip():
-            logger.info("Empty query - returning all todo IDs")
-            return [todo['id'] for todo in todos]
+            logger.info("Empty query - returning all todos")
+            return todos
         
-        # If no API key, fall back to simple search
-        if not self.anthropic_api_key:
-            logger.warning("No Anthropic API key, using simple text search")
-            query_lower = query.lower()
-            matched = [todo for todo in todos if query_lower in todo['text'].lower()]
-            return [todo['id'] for todo in matched]
+        query_lower = query.lower()
+        scored_todos: List[Tuple[Dict[str, Any], float]] = []
         
-        try:
-            # Prepare prompt for LLM
-            prompt = f"""You are helping search through a todo list. Given a search query and a list of todos, return ONLY the IDs of matching todos.
-
-SEARCH QUERY: "{query}"
-
-ALL TODOS:
-{json.dumps(todos, indent=2)}
-
-INSTRUCTIONS:
-1. Find todos that match the search query
-2. Match by: text content, tags, due dates (handle different date formats like "10/17" = "Oct 17" = "2025-10-17")
-3. Return ONLY a JSON array of the matching todo IDs (strings)
-4. Return empty array [] if no matches
-5. Do NOT include any explanation, just the JSON array of IDs
-
-Output format: ["todo-123", "todo-456", "todo-789"]"""
-
-            results = call_llm_for_json(
-                api_key=self.anthropic_api_key,
-                model="claude-sonnet-4-5-20250929",
-                prompt=prompt,
-                max_tokens=2048,  # Reduced since we're only returning IDs
-                operation_name=f"Todo search for '{query}'"
-            )
+        # Try parsing as date
+        date_str = self._parse_date_query(query)
+        
+        for todo in todos:
+            score = 0.0
             
-            logger.info(f"🔍 Found {len(results)} matching todo IDs")
-            return results
+            # Check for exact substring match in text (high score)
+            if query_lower in todo['text'].lower():
+                score = max(score, 0.9)
             
-        except Exception as e:
-            logger.error(f"Error in LLM search: {e}")
-            # Fallback to simple text search
-            query_lower = query.lower()
-            matched = [todo for todo in todos if query_lower in todo['text'].lower()]
-            return [todo['id'] for todo in matched]
+            # Fuzzy match on text
+            text_score = self._fuzzy_match_score(query, todo['text'])
+            score = max(score, text_score * 0.8)
+            
+            # Check tags for exact or fuzzy match
+            if 'tags' in todo and todo['tags']:
+                for tag in todo['tags']:
+                    if query_lower in tag.lower():
+                        score = max(score, 0.85)
+                    else:
+                        tag_score = self._fuzzy_match_score(query, tag)
+                        score = max(score, tag_score * 0.7)
+            
+            # Check due_date if query looks like a date
+            if date_str and 'due_date' in todo and todo['due_date']:
+                if todo['due_date'] == date_str:
+                    score = max(score, 1.0)  # Perfect date match
+                # Also check if query date is mentioned in text
+                elif date_str in todo['text']:
+                    score = max(score, 0.85)
+            
+            # Include todos with score > threshold
+            if score > 0.3:  # Threshold for relevance
+                scored_todos.append((todo, score))
+        
+        # Sort by score descending
+        scored_todos.sort(key=lambda x: x[1], reverse=True)
+        matched_todos = [todo for todo, _ in scored_todos]
+        
+        logger.info(f"🔍 Found {len(matched_todos)} matching todos for query: '{query}'")
+        if date_str:
+            logger.info(f"   Parsed date: {date_str}")
+        
+        return matched_todos
     
     def _parse_priority(self, text: str) -> str:
         """Extract priority from text (high/medium/low)"""
@@ -328,11 +366,11 @@ Output format: ["todo-123", "todo-456", "todo-789"]"""
             ),
             create_tool(
                 name="search_todos",
-                description="Search todos by text, tags, or due date. Returns only the IDs of matching todos. Use empty string to get all todo IDs. After getting IDs, you can use get_preferences or read the 'Todo List' resource to see full details.",
+                description="Search todos by text, tags, or due date. Returns full todo objects (with id, text, due_date, tags, priority, completed status) sorted by relevance. Supports fuzzy matching and natural language dates like 'today', 'tomorrow', 'Oct 9'. Use empty string to get all todos.",
                 parameters={
                     "query": {
                         "type": "string",
-                        "description": "Search query - can be keywords from todo text, tag names, or dates in various formats (e.g., 'dentist', 'work', '10/17', 'Oct 17'). Use empty string '' to get all todos."
+                        "description": "Search query - can be keywords from todo text, tag names, or dates in various formats (e.g., 'dentist', 'work', 'today', '10/17', 'Oct 9'). Use empty string '' to get all todos."
                     }
                 },
                 required=["query"]
