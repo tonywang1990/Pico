@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader, Sparkles, Wrench, CheckCircle, XCircle, ChevronDown, ChevronUp, Clock, Zap, Activity } from 'lucide-react';
+import { Send, Loader, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import './ChatPanel.css';
@@ -10,17 +10,9 @@ function ChatPanel({ onChatAction }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [thinkingSteps, setThinkingSteps] = useState([]);
-  const [expandedProfiling, setExpandedProfiling] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const toggleProfiling = (index) => {
-    setExpandedProfiling(prev => ({
-      ...prev,
-      [index]: !prev[index]
-    }));
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -52,14 +44,13 @@ function ChatPanel({ onChatAction }) {
     setMessages(newMessages);
     setInput('');
     setIsLoading(true);
-    setThinkingSteps([]);
 
     try {
       // Filter out any messages with empty content before sending
       const validMessages = newMessages.filter(msg => msg.content && msg.content.trim() !== '');
       
-      // Use streaming endpoint
-      const response = await fetch(`${API_URL}/chat/stream`, {
+      // Use non-streaming endpoint
+      const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -74,87 +65,20 @@ function ChatPanel({ onChatAction }) {
         throw new Error('Network response was not ok');
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let assistantResponse = '';
-      let metadata = {};
-      let profiling = null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-            
-            switch (data.type) {
-              case 'thinking':
-                setThinkingSteps(prev => [...prev, { type: 'thinking', timestamp: Date.now() }]);
-                break;
-              
-              case 'tool_call':
-                setThinkingSteps(prev => [...prev, {
-                  type: 'tool_call',
-                  tool: data.tool,
-                  args: data.args,
-                  timestamp: Date.now()
-                }]);
-                break;
-              
-              case 'tool_result':
-                setThinkingSteps(prev => [...prev, {
-                  type: 'tool_result',
-                  tool: data.tool,
-                  success: data.success,
-                  result: data.result,
-                  error: data.error,
-                  timestamp: Date.now()
-                }]);
-                break;
-              
-              case 'response':
-                assistantResponse = data.text;
-                break;
-              
-              case 'done':
-                metadata = data.metadata || {};
-                profiling = data.profiling || null;
-                break;
-              
-              case 'error':
-                throw new Error(data.error);
-              
-              default:
-                // Ignore unknown event types
-                break;
-            }
-          }
-        }
-      }
-
+      const data = await response.json();
+      
       // Add assistant message if there's content
-      if (assistantResponse && assistantResponse.trim()) {
-        console.log('Profiling data received:', profiling);
+      if (data.response && data.response.trim()) {
         setMessages([...newMessages, {
           role: 'assistant',
-          content: assistantResponse,
-          profiling: profiling,
+          content: data.response,
         }]);
       }
 
       // Notify parent about actions
-      if (Object.keys(metadata).length > 0 && onChatAction) {
-        onChatAction(metadata);
+      if (data.metadata && Object.keys(data.metadata).length > 0 && onChatAction) {
+        onChatAction(data.metadata);
       }
-
-      // Clear thinking steps after a delay
-      setTimeout(() => {
-        setThinkingSteps([]);
-      }, 2000);
 
     } catch (error) {
       console.error('Error sending message:', error);
@@ -199,140 +123,12 @@ function ChatPanel({ onChatAction }) {
                 msg.content
               )}
             </div>
-            {msg.role === 'assistant' && (() => {
-              console.log('Message profiling check:', {
-                hasRole: msg.role === 'assistant',
-                hasProfiling: !!msg.profiling,
-                hasTimeline: msg.profiling?.timeline ? true : false,
-                profiling: msg.profiling
-              });
-              return msg.profiling && msg.profiling.timeline;
-            })() && (
-              <div className="profiling-section">
-                <button 
-                  className="profiling-toggle"
-                  onClick={() => toggleProfiling(idx)}
-                >
-                  <Activity size={12} />
-                  <span>Performance details</span>
-                  {expandedProfiling[idx] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-                
-                {expandedProfiling[idx] && (
-                  <div className="profiling-details">
-                    <div className="profiling-summary">
-                      <div className="profiling-stat">
-                        <Clock size={14} />
-                        <span className="stat-label">Total Duration</span>
-                        <span className="stat-value">{msg.profiling.total_duration_ms}ms</span>
-                      </div>
-                      <div className="profiling-stat">
-                        <Zap size={14} />
-                        <span className="stat-label">LLM Calls</span>
-                        <span className="stat-value">
-                          {msg.profiling.timeline.filter(c => c.type === 'llm').length}
-                        </span>
-                      </div>
-                      <div className="profiling-stat">
-                        <Wrench size={14} />
-                        <span className="stat-label">Tool Calls</span>
-                        <span className="stat-value">
-                          {msg.profiling.timeline.filter(c => c.type === 'tool').length}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="profiling-tokens">
-                      <div className="token-stat">
-                        <span className="token-label">Input Tokens</span>
-                        <span className="token-value">{msg.profiling.total_input_tokens.toLocaleString()}</span>
-                      </div>
-                      <div className="token-stat">
-                        <span className="token-label">Output Tokens</span>
-                        <span className="token-value">{msg.profiling.total_output_tokens.toLocaleString()}</span>
-                      </div>
-                      <div className="token-stat total">
-                        <span className="token-label">Total</span>
-                        <span className="token-value">
-                          {(msg.profiling.total_input_tokens + msg.profiling.total_output_tokens).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {msg.profiling.timeline.length > 0 && (
-                      <div className="profiling-breakdown">
-                        <div className="breakdown-title">Call Timeline</div>
-                        {msg.profiling.timeline.map((call, i) => (
-                          <div key={i} className={`breakdown-item ${call.type}`}>
-                            <span className="item-sequence">#{call.sequence}</span>
-                            {call.type === 'llm' ? (
-                              <>
-                                <Zap size={12} className="item-icon" />
-                                <span className="item-label">LLM (iter {call.iteration})</span>
-                                <span className="item-value">{call.duration_ms}ms</span>
-                                <span className="item-tokens">
-                                  {call.input_tokens} in / {call.output_tokens} out
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <Wrench size={12} className="item-icon" />
-                                <span className="item-label">{call.tool}</span>
-                                <span className="item-value">{call.duration_ms}ms</span>
-                                <span className={`item-status ${call.success ? 'success' : 'error'}`}>
-                                  {call.success ? '✓' : '✗'}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         ))}
         {isLoading && (
-          <div className="message assistant thinking-container">
-            {thinkingSteps.map((step, idx) => (
-              <div key={idx} className="thinking-step">
-                {step.type === 'thinking' && (
-                  <div className="thinking-indicator">
-                    <Loader size={14} className="spinner" />
-                    <span>Thinking...</span>
-                  </div>
-                )}
-                {step.type === 'tool_call' && (
-                  <div className="tool-call">
-                    <Wrench size={14} />
-                    <span>Calling <strong>{step.tool}</strong></span>
-                  </div>
-                )}
-                {step.type === 'tool_result' && (
-                  <div className={`tool-result ${step.success ? 'success' : 'error'}`}>
-                    {step.success ? (
-                      <>
-                        <CheckCircle size={14} />
-                        <span><strong>{step.tool}</strong> completed</span>
-                      </>
-                    ) : (
-                      <>
-                        <XCircle size={14} />
-                        <span><strong>{step.tool}</strong> failed</span>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-            {thinkingSteps.length === 0 && (
-              <div className="thinking-indicator">
-                <Loader size={14} className="spinner" />
-                <span>Starting...</span>
-              </div>
-            )}
+          <div className="thinking-indicator">
+            <Loader size={14} className="spinner" />
+            <span>Thinking...</span>
           </div>
         )}
         <div ref={messagesEndRef} />

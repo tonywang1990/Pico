@@ -364,6 +364,9 @@
 .thinking-indicator {
   color: var(--text-secondary);
   background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-secondary) 100%);
+  max-width: 85%;
+  align-self: flex-start;
+  width: fit-content;
 }
 
 .thinking-indicator .spinner {
@@ -384,6 +387,20 @@
 .tool-call svg {
   color: var(--accent-primary);
   flex-shrink: 0;
+}
+
+.tool-call.server-tool {
+  background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
+  border-color: #93C5FD;
+}
+
+.dark-mode .tool-call.server-tool {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.tool-call.server-tool svg {
+  color: #3b82f6;
 }
 
 .tool-result {

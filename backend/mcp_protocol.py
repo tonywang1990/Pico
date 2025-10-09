@@ -119,13 +119,18 @@ class MCPClient:
         
         return "\n\n".join(context_parts)
     
-    def get_tools_for_claude(self) -> List[Dict[str, Any]]:
+    def get_tools_for_claude(self, enable_web_search: bool = True) -> List[Dict[str, Any]]:
         """
         Convert standard MCP Tools to Anthropic Claude tool format
+        and optionally add built-in Anthropic tools like web search
+        
+        Args:
+            enable_web_search: Whether to include the web search tool (default True)
         """
         tools = self.discover_all_tools()
         claude_tools = []
         
+        # Add MCP plugin tools
         for tool in tools:
             # MCP Tool already has inputSchema, convert to Claude format
             claude_tool = {
@@ -134,6 +139,15 @@ class MCPClient:
                 "input_schema": tool.inputSchema
             }
             claude_tools.append(claude_tool)
+        
+        # Add web search tool if enabled
+        if enable_web_search:
+            web_search_tool = {
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "max_uses": 5  # Limit to 5 searches per request
+            }
+            claude_tools.append(web_search_tool)
         
         return claude_tools
 
