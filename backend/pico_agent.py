@@ -25,121 +25,61 @@ class PicoAgent:
         self.client = anthropic.Anthropic(api_key=api_key)
         self.mcp_client = mcp_client
         self.model = "claude-sonnet-4-5-20250929"
+        
+        # Cache tools list (doesn't change during runtime)
+        self._cached_tools = None
+        
+        # Cache base system prompt (static part)
+        self._base_system_prompt = self._build_base_system_prompt()
 
         # Log initialization
         servers = self.mcp_client.list_servers()
         logger.info(f"PicoAgent initialized with {len(servers)} MCP servers: {servers}")
 
         # Log all tools including server tools like web_search
-        all_tools = self.mcp_client.get_tools_for_claude()
+        all_tools = self.get_tools()
         all_tool_names = [t.get('name', t.get('type', 'unknown')) for t in all_tools]
         logger.info(f"Total tools available (including server tools): {len(all_tools)} - {all_tool_names}")
 
-    def _build_system_message(self, include_plugin_data: bool = True) -> str:
-        """Build system message with context from MCP resources"""
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        system_message = f"""You are Pico, a personalized AI assistant integrated into a note-taking app. 
+    def _build_base_system_prompt(self) -> str:
+        """Build the static base system prompt (cached)"""
+        return """You are Pico, a personalized AI assistant for note-taking and task management.
 
-You have access to the user's notes, todos, and preferences through MCP plugins. You can help them by USING TOOLS to:
+**Core Capabilities (via tools):**
 - Search, create, and update notes
-- Create, update, reorder, and complete todos
-- Learn and store user preferences over time
-- Organize and manage their information
-- **Search the web** for real-time information beyond your knowledge cutoff (automatically cite sources)
+- Manage todos (create, update, complete, delete, reorder)
+- Learn user preferences over time
+- Search the web for current information
 
-**CRITICAL - ALWAYS USE TOOLS FOR ACTIONS**: 
-When users ask you to DO something with their data, you MUST use tools to make changes. Examples:
-- "Add a todo" → use create_todo tool
-- "Update the appointment" → search_todos to find it, then use update_todo tool  
-- "Mark X as done" → search_todos to find it, then use complete_todo tool
-- "Delete/Remove X" → search_todos to find it, then use delete_todo tool
-- "Create a note" → use create_note tool
-- "Add a time to X" → search_todos to find it, then use update_todo tool to modify the text
-- "Change priority of X" → search_todos to find it, then use update_todo tool
+**CRITICAL RULES:**
+1. **Always use tools for actions** - Don't just say you did something, actually call the tool
+2. **Search before modifying** - Use search_todos/search_notes to find items, then call update/delete/complete with the ID
+3. **Todos need due dates** - If user doesn't specify, ask before creating
+4. **Update preferences** - After completing tasks, call update_preferences() to remember patterns
 
-**WORKFLOW FOR MODIFICATIONS**: When users want to modify/update/delete an existing item:
-1. First use search_todos or search_notes to find the item by keywords
-2. Get the item's ID from the search results
-3. Then call the appropriate tool with that ID:
-   - update_todo / update_note - to modify content
-   - complete_todo - to mark as done
-   - delete_todo - to remove permanently
+**Workflow for modifications:**
+1. Search for the item
+2. Get its ID from results
+3. Call the appropriate tool (update/complete/delete)
 
-NEVER just respond with "I've updated..." without actually calling the tool. The user expects you to make real changes to their data.
+**Preference Learning:**
+Use `update_preferences({"general": {...}, "todos_plugin": {...}, "notes_plugin": {...}})` to store learnings.
 
-**CRITICAL TODO CREATION RULE**: When creating todos, a due date is MANDATORY. If the user doesn't specify when a task is due:
-1. Ask them for a due date before creating the todo
-2. Suggest reasonable due dates based on context (e.g., "When would you like this done? Tomorrow? End of week?")
-3. Only create the todo after you have a specific due date
-4. You can parse natural language dates like "tomorrow", "next Monday", "in 3 days", etc.
+**Web Search:**
+Use for current events, real-time data, recent updates (5 searches max per request).
 
-**Example conversations:**
+Be concise and use Markdown formatting."""
 
-Example 1 - Creating todo:
-User: "Add a todo to review the budget report"
-Pico: "I'll add that todo. When would you like to review the budget report? Tomorrow? End of this week?"
-User: "Next Monday"
-Pico: [Calls create_todo tool with due_date for next Monday]
-
-Example 2 - Updating todo:
-User: "Add a time for the dentist appointment, 2pm"
-Pico: [Calls search_todos to find "dentist", then calls update_todo to add "2pm" to the text]
-
-Today's date is {today_date}.
-
-## Personalization & Learning (IMPORTANT)
-You have an **AI-powered preference system** that helps you become progressively smarter:
-
-**Two Simple Tools:**
-1. `get_preferences(sections)` - Read preferences (usually auto-loaded via resources)
-2. `update_preferences(updates)` - Store learnings using AI merging
-
-**When to Update Preferences:**
-After completing tasks or interactions, use `update_preferences()` with this JSON format:
-```json
-{{
-  "general": {{"key": "User's name is Tony"}},
-  "todos_plugin": {{"organization": "User organizes by Eisenhower urgency/importance matrix"}},
-  "notes_plugin": {{"style": "User prefers markdown with clear headings"}}
-}}
-```
-
-The system uses **AI to intelligently merge** your learnings with existing preferences, removing contradictions and duplicates automatically.
-
-**Sections:**
-- `general` - Name, communication style, work patterns
-- `notes_plugin` - Note-taking preferences
-- `todos_plugin` - Task management preferences
-
-**CRITICAL**: After organizing todos, creating notes, or any task the user might repeat, ALWAYS call `update_preferences()` to remember the pattern. The AI will merge it intelligently with what's already known.
-
-## Web Search Guidelines
-You have access to real-time web search to answer questions beyond your knowledge cutoff:
-
-**When to Use Web Search:**
-- Current events, news, or recent developments
-- Real-time data (weather, stock prices, sports scores)
-- Information about recent products, releases, or updates
-- Checking facts that may have changed since your training
-- Finding specific current resources or documentation
-
-**Best Practices:**
-- Search queries should be specific and focused
-- You're limited to 5 searches per request - use them wisely
-- Always cite sources when using search results
-- Combine search results with your existing knowledge for comprehensive answers
-
-Be concise, helpful, and proactive. When you spot action items, suggest adding them to the todo list.
-Format your responses using Markdown for better readability (headings, lists, bold, etc.).
-"""
-
-        if include_plugin_data:
-            # Get context from all MCP resources
-            context = self.mcp_client.get_all_context()
-            if context:
-                system_message += f"\n\nAvailable Data:\n{context}"
-
-        return system_message
+    def _build_system_message(self) -> str:
+        """Build system message with current date"""
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        return f"{self._base_system_prompt}\n\nToday's date is {today_date}."
+    
+    def get_tools(self) -> List[Dict[str, Any]]:
+        """Get tools list (cached for performance)"""
+        if self._cached_tools is None:
+            self._cached_tools = self.mcp_client.get_tools_for_claude()
+        return self._cached_tools
 
     def _track_action_metadata(
         self, tool_name: str, result: Any, metadata: Dict[str, Any]
@@ -262,7 +202,6 @@ Format your responses using Markdown for better readability (headings, lists, bo
     def chat(
         self,
         messages: List[Dict[str, str]],
-        include_plugin_data: bool = True,  # Changed default to True so agent always has context
         max_tokens: int = 2048,
     ) -> Dict[str, Any]:
         """
@@ -271,7 +210,6 @@ Format your responses using Markdown for better readability (headings, lists, bo
 
         Args:
             messages: List of message dicts with 'role' and 'content'
-            include_plugin_data: Whether to include plugin data in context (default False for agentic mode)
             max_tokens: Maximum tokens for response
 
         Returns:
@@ -282,8 +220,8 @@ Format your responses using Markdown for better readability (headings, lists, bo
         logger.info(f"=== New chat session ===")
         logger.info(f"User query: {user_query[:100]}...")
 
-        system_message = self._build_system_message(include_plugin_data)
-        tools = self.mcp_client.get_tools_for_claude()
+        system_message = self._build_system_message()
+        tools = self.get_tools()
         logger.info(f"Available tools for this session: {len(tools)}")
 
         # Track all actions (plugin-agnostic)
@@ -292,33 +230,37 @@ Format your responses using Markdown for better readability (headings, lists, bo
         # Agentic loop configuration
         iteration = 0
         max_iterations = 10
+        response = None
 
         try:
             # Agentic loop: make calls until agent is satisfied
-            response = self._call_claude(system_message, messages, tools, max_tokens)
-            logger.info(f"Claude response stop_reason: {response.stop_reason}")
-
-            while response.stop_reason == "tool_use" and iteration < max_iterations:
-                iteration += 1
-                logger.info(
-                    f"🔧 Agentic iteration {iteration}: Claude requested tool use"
-                )
-
-                # Process all tool calls in this response
-                tool_results = self._process_tool_calls(
-                    response.content, actions_metadata
-                )
-                logger.info(
-                    f"🔄 Sending {len(tool_results)} tool results back to Claude"
-                )
-
-                # Append to conversation
-                messages.append({"role": "assistant", "content": response.content})
-                messages.append({"role": "user", "content": tool_results})
-
-                # Get next response
+            while iteration < max_iterations:
+                # Call Claude
                 response = self._call_claude(system_message, messages, tools, max_tokens)
                 logger.info(f"Claude response stop_reason: {response.stop_reason}")
+
+                # Check if Claude wants to use tools
+                if response.stop_reason == "tool_use":
+                    iteration += 1
+                    logger.info(
+                        f"🔧 Agentic iteration {iteration}: Claude requested tool use"
+                    )
+
+                    # Process all tool calls in this response
+                    tool_results = self._process_tool_calls(
+                        response.content, actions_metadata
+                    )
+                    logger.info(
+                        f"🔄 Sending {len(tool_results)} tool results back to Claude"
+                    )
+
+                    # Append to conversation
+                    messages.append({"role": "assistant", "content": response.content})
+                    messages.append({"role": "user", "content": tool_results})
+                else:
+                    # Agent is satisfied, exit loop
+                    break
+
 
             # Check if we hit the iteration limit
             if iteration >= max_iterations:

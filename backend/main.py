@@ -100,7 +100,6 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
-    include_notes: bool = True  # Default True so agent always has full context
 
 # Routes
 @app.get("/")
@@ -168,10 +167,7 @@ async def chat(request: ChatRequest):
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
         
         # Use Pico Agent to process the chat
-        result = pico_agent.chat(
-            messages=messages,
-            include_plugin_data=request.include_notes
-        )
+        result = pico_agent.chat(messages=messages)
 
         return {
             "response": result["response"],

@@ -57,7 +57,6 @@ function ChatPanel({ onChatAction }) {
         },
         body: JSON.stringify({
           messages: validMessages,
-          include_notes: false,  // Agentic mode - let agent search when needed
         }),
       });
 
