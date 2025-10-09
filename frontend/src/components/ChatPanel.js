@@ -49,8 +49,8 @@ function ChatPanel({ onChatAction }) {
       // Filter out any messages with empty content before sending
       const validMessages = newMessages.filter(msg => msg.content && msg.content.trim() !== '');
       
-      // Use non-streaming endpoint
-      const response = await fetch(`${API_URL}/chat`, {
+      // Use streaming endpoint
+      const response = await fetch(`${API_URL}/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,19 +64,42 @@ function ChatPanel({ onChatAction }) {
         throw new Error('Network response was not ok');
       }
 
-      const data = await response.json();
-      
-      // Add assistant message if there's content
-      if (data.response && data.response.trim()) {
-        setMessages([...newMessages, {
-          role: 'assistant',
-          content: data.response,
-        }]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantResponse = '';
+      let thinkingLength = 0; // Track where thinking text ends
+      let metadata = {};
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+            
+            if (data.type === 'text_chunk') {
+              assistantResponse += data.text;
+              setMessages([...newMessages, { role: 'assistant', content: assistantResponse, thinkingLength }]);
+            } else if (data.type === 'mark_thinking') {
+              // Mark everything up to this point as "thinking" (intermediate response)
+              thinkingLength = assistantResponse.length;
+              setMessages([...newMessages, { role: 'assistant', content: assistantResponse, thinkingLength }]);
+            } else if (data.type === 'done') {
+              metadata = data.metadata || {};
+            } else if (data.type === 'error') {
+              throw new Error(data.error);
+            }
+          }
+        }
       }
 
       // Notify parent about actions
-      if (data.metadata && Object.keys(data.metadata).length > 0 && onChatAction) {
-        onChatAction(data.metadata);
+      if (Object.keys(metadata).length > 0 && onChatAction) {
+        onChatAction(metadata);
       }
 
     } catch (error) {
@@ -112,24 +135,36 @@ function ChatPanel({ onChatAction }) {
           </div>
         )}
         {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.role}`}>
-            <div className="message-content">
-              {msg.role === 'assistant' ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {msg.content}
-                </ReactMarkdown>
-              ) : (
-                msg.content
-              )}
+          <React.Fragment key={idx}>
+            <div className={`message ${msg.role}`}>
+              <div className="message-content">
+                {msg.role === 'assistant' ? (
+                  <>
+                    {msg.thinkingLength > 0 && (
+                      <div className="thinking-text">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content.substring(0, msg.thinkingLength)}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content.substring(msg.thinkingLength || 0)}
+                    </ReactMarkdown>
+                  </>
+                ) : (
+                  msg.content
+                )}
+              </div>
             </div>
-          </div>
+            {/* Show thinking indicator only after the LAST message when loading */}
+            {isLoading && idx === messages.length - 1 && (
+              <div className="thinking-indicator">
+                <Loader size={14} className="spinner" />
+                <span>Thinking...</span>
+              </div>
+            )}
+          </React.Fragment>
         ))}
-        {isLoading && (
-          <div className="thinking-indicator">
-            <Loader size={14} className="spinner" />
-            <span>Thinking...</span>
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 

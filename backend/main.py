@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -177,6 +179,31 @@ async def chat(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Streaming Chat endpoint
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """Streaming endpoint that yields text chunks as they're generated"""
+    def event_generator():
+        try:
+            # Convert messages to format expected by agent
+            messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+            
+            # Stream events from agent
+            for event in pico_agent.chat(messages=messages, stream=True):
+                yield f"data: {json.dumps(event)}\n\n"
+                
+        except Exception as e:
+            error_event = {"type": "error", "error": str(e)}
+            yield f"data: {json.dumps(error_event)}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 if __name__ == "__main__":
     import uvicorn

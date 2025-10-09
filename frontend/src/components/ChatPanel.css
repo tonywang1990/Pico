@@ -123,6 +123,28 @@
   border-bottom-left-radius: 6px;
 }
 
+.thinking-text {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  opacity: 0.6;
+  font-style: italic;
+  margin-bottom: 16px;
+  text-decoration: underline;
+  text-decoration-color: var(--border-secondary);
+  text-decoration-style: solid;
+  text-underline-offset: 3px;
+}
+
+.thinking-text p {
+  margin: 0;
+  font-size: 12px !important;
+}
+
+.thinking-text * {
+  color: var(--text-tertiary) !important;
+  font-size: 12px !important;
+}
+
 .message-content:hover {
   box-shadow: var(--shadow-md);
 }

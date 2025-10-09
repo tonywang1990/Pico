@@ -2,7 +2,7 @@
 Pico Agent - The main AI assistant that interacts with plugins via MCP
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Generator
 import anthropic
 import json
 import logging
@@ -224,7 +224,8 @@ Be concise and use Markdown formatting."""
         self,
         messages: List[Dict[str, str]],
         max_tokens: int = 2048,
-    ) -> Dict[str, Any]:
+        stream: bool = False,
+    ) -> Dict[str, Any] | Generator[Dict[str, Any], None, None]:
         """
         Process a chat message and return response with tool use support.
         Implements an agentic loop that continues until the agent is satisfied.
@@ -232,10 +233,15 @@ Be concise and use Markdown formatting."""
         Args:
             messages: List of message dicts with 'role' and 'content'
             max_tokens: Maximum tokens for response
+            stream: If True, yields streaming events; if False, returns complete response
 
         Returns:
-            Dict with 'response' text and metadata about actions taken
+            Dict with 'response' text and metadata about actions taken (if stream=False)
+            Generator yielding events (if stream=True)
         """
+        if stream:
+            return self._chat_stream(messages, max_tokens)
+        
         # Setup
         user_query = messages[-1]["content"] if messages else "No message"
         logger.info(f"=== New chat session ===")
@@ -301,6 +307,102 @@ Be concise and use Markdown formatting."""
         logger.info(f"=== Chat session complete ===\n")
 
         return {"response": response_text, "metadata": actions_metadata}
+    
+    def _chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int = 2048,
+    ) -> Generator[Dict[str, Any], None, None]:
+        """Streaming version of chat - uses Claude's native streaming for minimal latency"""
+        # Setup
+        user_query = messages[-1]["content"] if messages else "No message"
+        logger.info(f"=== New streaming chat session ===")
+        logger.info(f"User query: {user_query[:100]}...")
+
+        system_message = self._build_system_message()
+        tools = self.get_tools()
+
+        # Track all actions
+        actions_metadata = {}
+
+        # Agentic loop configuration
+        iteration = 0
+        max_iterations = 10
+
+        try:
+            # Agentic loop: make calls until agent is satisfied
+            while iteration < max_iterations:
+                start_time = time.time()
+                
+                # Use native streaming from Anthropic
+                with self.client.messages.stream(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    system=system_message,
+                    messages=messages,
+                    tools=tools if tools else None,
+                ) as stream:
+                    # Log time to first token
+                    first_token_time = None
+                    response_text = ""
+                    
+                    # Stream text deltas as they arrive
+                    for event in stream:
+                        if event.type == "content_block_delta":
+                            if event.delta.type == "text_delta":
+                                if first_token_time is None:
+                                    first_token_time = time.time()
+                                    ttft_ms = (first_token_time - start_time) * 1000
+                                    logger.info(f"⚡ Time to first token: {ttft_ms:.0f}ms (iteration {iteration})")
+                                
+                                # Stream ALL text from ALL LLM calls
+                                yield {"type": "text_chunk", "text": event.delta.text}
+                    
+                    # Get the final message
+                    final_message = stream.get_final_message()
+                    
+                    # Log performance
+                    latency_ms = (time.time() - start_time) * 1000
+                    logger.info(f"⚡ Total streaming completed in {latency_ms:.0f}ms")
+                    logger.info(f"📊 Tokens - Input: {final_message.usage.input_tokens:,} | Output: {final_message.usage.output_tokens:,}")
+                    logger.info(f"🔄 Stop reason: {final_message.stop_reason}")
+                    
+                    # Check for server tool usage in content
+                    has_server_tools = any(block.type == "server_tool_use" for block in final_message.content)
+                    if has_server_tools:
+                        logger.info(f"🌐 Server tools detected in response")
+                    
+                    # Check if Claude wants to use tools OR used server tools
+                    if final_message.stop_reason == "tool_use" or has_server_tools:
+                        iteration += 1
+                        logger.info(f"🔧 Agentic iteration {iteration}: Claude requested tool use")
+                        
+                        # Process tool calls
+                        tool_results = self._process_tool_calls(
+                            final_message.content, actions_metadata
+                        )
+
+                        # Append to conversation
+                        messages.append({"role": "assistant", "content": final_message.content})
+                        messages.append({"role": "user", "content": tool_results})
+                        
+                        # Mark current text as intermediate thinking (not final response)
+                        yield {"type": "mark_thinking"}
+                        
+                        # Add separator for readability between iterations
+                        yield {"type": "text_chunk", "text": "\n\n"}
+                    else:
+                        # Final response received, exit loop
+                        break
+
+            # Yield completion with metadata
+            yield {"type": "done", "metadata": actions_metadata}
+            
+            logger.info(f"🎯 Completed in {iteration} agentic iterations")
+
+        except Exception as e:
+            logger.error(f"Error in streaming chat: {str(e)}")
+            yield {"type": "error", "error": str(e)}
 
     def get_server(self, name: str) -> MCPServer:
         """Get an MCP server by name"""
