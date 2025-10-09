@@ -1,0 +1,1 @@
+- When running any python commands in the bash shell, you must first activate the project environment: `conda activate pico`
