@@ -16,6 +16,7 @@ function App() {
   const [todoListWidth, setTodoListWidth] = useState(380); // Default 380px (increased from 300px)
   const [isResizingChat, setIsResizingChat] = useState(false);
   const [isResizingTodo, setIsResizingTodo] = useState(false);
+  const [todoCollapsed, setTodoCollapsed] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     // Load from localStorage or default to false
     const saved = localStorage.getItem('darkMode');
@@ -358,17 +359,21 @@ function App() {
 
   return (
     <div className="app">
-      <div className="todo-panel-container" style={{ width: `${todoListWidth}px` }}>
+      <div className="todo-panel-container" style={{ width: todoCollapsed ? '48px' : `${todoListWidth}px` }}>
         <TodoList
           todos={todos}
           onToggleTodo={toggleTodo}
           onDeleteTodo={deleteTodo}
+          collapsed={todoCollapsed}
+          onToggleCollapse={() => setTodoCollapsed(!todoCollapsed)}
         />
-        <div 
-          className="todo-resizer" 
-          onMouseDown={handleTodoMouseDown}
-          style={{ cursor: isResizingTodo ? 'col-resize' : 'col-resize' }}
-        />
+        {!todoCollapsed && (
+          <div 
+            className="todo-resizer" 
+            onMouseDown={handleTodoMouseDown}
+            style={{ cursor: isResizingTodo ? 'col-resize' : 'col-resize' }}
+          />
+        )}
       </div>
       
       <div className="main-content">

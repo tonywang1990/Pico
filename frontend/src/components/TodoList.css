@@ -4,6 +4,14 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.todo-list.collapsed {
+  align-items: center;
+  justify-content: center;
+  width: 48px;
 }
 
 .todo-header {
@@ -48,6 +56,61 @@
   flex-shrink: 0;
 }
 
+/* Collapse Button */
+.todo-collapse-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Show button on hover over the panel */
+.todo-list:hover .todo-collapse-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Expanded state button - on the right edge */
+.todo-collapse-btn.expanded-btn {
+  right: -14px;
+}
+
+.todo-collapse-btn.expanded-btn:hover {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Collapsed state button - centered in the narrow panel */
+.todo-collapse-btn.collapsed-btn {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.todo-collapse-btn.collapsed-btn:hover {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+  transform: scale(1.1);
+  box-shadow: var(--shadow-lg);
+}
 
 /* Tag Filter Dropdown */
 .tag-filter-dropdown {

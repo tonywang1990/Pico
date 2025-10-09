@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Check, Trash2, ChevronDown, ChevronLeft, ChevronRight, Archive, CheckSquare, Tag, X } from 'lucide-react';
+import { Check, Trash2, ChevronDown, ChevronLeft, ChevronRight, Archive, CheckSquare, Tag, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Calendar from './Calendar';
 import './TodoList.css';
 
-function TodoList({ todos, onToggleTodo, onDeleteTodo }) {
+function TodoList({ todos, onToggleTodo, onDeleteTodo, collapsed, onToggleCollapse }) {
   const [archiveExpanded, setArchiveExpanded] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, 1 = next week
   const [selectedTags, setSelectedTags] = useState([]);
@@ -195,8 +195,23 @@ function TodoList({ todos, onToggleTodo, onDeleteTodo }) {
     );
   };
 
+  // Collapsed view
+  if (collapsed) {
+    return (
+      <div className="todo-list collapsed">
+        <button className="todo-collapse-btn collapsed-btn" onClick={onToggleCollapse} title="Expand Calendar">
+          <PanelLeftOpen size={18} />
+        </button>
+      </div>
+    );
+  }
+
+  // Full view
   return (
     <div className="todo-list">
+      <button className="todo-collapse-btn expanded-btn" onClick={onToggleCollapse} title="Collapse Calendar">
+        <PanelLeftClose size={18} />
+      </button>
       <div className="todo-header">
         <div className="todo-title-row">
           <CheckSquare size={16} className="todo-icon" />
