@@ -263,6 +263,27 @@ function App() {
       .catch(error => console.error('Error creating tab:', error));
   };
 
+  const deleteNote = async (noteId) => {
+    // Don't allow deleting the main note
+    if (noteId === 'main') return;
+    
+    try {
+      await axios.delete(`${API_URL}/notes/${noteId}`);
+      setNotes(notes.filter(n => n.id !== noteId));
+      
+      // Also close the tab if it's open
+      setTabs(tabs.filter(t => t.id !== noteId));
+      if (activeTab === noteId) {
+        const remainingTabs = tabs.filter(t => t.id !== noteId);
+        setActiveTab(remainingTabs.length > 0 ? remainingTabs[0].id : null);
+      }
+      
+      console.log(`Deleted note: ${noteId}`);
+    } catch (error) {
+      console.error('Error deleting note:', error);
+    }
+  };
+
   const closeTab = async (tabId) => {
     if (tabs.find(t => t.id === tabId)?.isPermanent) return;
     
@@ -388,6 +409,7 @@ function App() {
           onUpdateNote={updateNote}
           onUpdateTitle={updateNoteTitle}
           onLoadNote={loadNoteInTab}
+          onDeleteNote={deleteNote}
           darkMode={darkMode}
           onToggleDarkMode={toggleDarkMode}
         />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, X, FolderOpen, Bold, Italic, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Edit2, Moon, Sun, CheckSquare } from 'lucide-react';
+import { Plus, X, FolderOpen, Bold, Italic, Strikethrough, List, ListOrdered, Heading1, Heading2, Heading3, Edit2, Moon, Sun, CheckSquare, Trash2 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -9,7 +9,7 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import './NoteEditor.css';
 
-function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, onCloseTab, onUpdateNote, onUpdateTitle, onLoadNote, darkMode, onToggleDarkMode }) {
+function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, onCloseTab, onUpdateNote, onUpdateTitle, onLoadNote, onDeleteNote, darkMode, onToggleDarkMode }) {
   const [showNotesMenu, setShowNotesMenu] = useState(false);
   const [editingTabId, setEditingTabId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -187,6 +187,14 @@ function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, on
     setShowNotesMenu(false);
   };
 
+  const handleDeleteNote = (noteId, e) => {
+    e.stopPropagation(); // Prevent opening the note
+    if (noteId === 'main') return; // Don't delete main note
+    if (window.confirm('Are you sure you want to delete this note?')) {
+      onDeleteNote(noteId);
+    }
+  };
+
   const startEditingTitle = (tabId, currentTitle, e) => {
     e.stopPropagation();
     setEditingTabId(tabId);
@@ -304,15 +312,26 @@ function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, on
                           className={`note-item ${n.id === activeTab ? 'active' : ''}`}
                           onClick={() => handleLoadNote(n.id)}
                         >
-                          <div className="note-item-title">{n.title}</div>
-                          <div className="note-item-meta">
-                            <span className="note-item-date">{formatDate(n.updated_at)}</span>
-                            {n.content && (
-                              <span className="note-item-preview">
-                                {n.content.replace(/<[^>]*>/g, '').substring(0, 50)}...
-                              </span>
-                            )}
+                          <div className="note-item-content">
+                            <div className="note-item-title">{n.title}</div>
+                            <div className="note-item-meta">
+                              <span className="note-item-date">{formatDate(n.updated_at)}</span>
+                              {n.content && (
+                                <span className="note-item-preview">
+                                  {n.content.replace(/<[^>]*>/g, '').substring(0, 50)}...
+                                </span>
+                              )}
+                            </div>
                           </div>
+                          {n.id !== 'main' && (
+                            <button
+                              className="delete-note-btn"
+                              onClick={(e) => handleDeleteNote(n.id, e)}
+                              title="Delete note"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       ))
                     ) : (

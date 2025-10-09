@@ -255,6 +255,14 @@
   margin-bottom: 6px;
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.note-item-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .note-item:hover {
@@ -305,6 +313,31 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.delete-note-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.note-item:hover .delete-note-btn {
+  opacity: 1;
+}
+
+.delete-note-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  transform: scale(1.1);
 }
 
 .notes-empty {
