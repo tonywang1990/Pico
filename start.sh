@@ -25,9 +25,6 @@ fi
 # Create log directory
 mkdir -p logs
 
-# Get conda initialization
-eval "$(conda shell.bash hook)"
-
 # Function to cleanup on exit
 cleanup() {
     echo ""
@@ -41,8 +38,8 @@ trap cleanup INT TERM
 
 # Start backend in conda environment
 echo "🐍 Starting backend (Python FastAPI)..."
-conda activate pico
-python backend/main.py > logs/backend.log 2>&1 &
+# Run in a subshell with conda activated
+(eval "$(conda shell.bash hook)" && conda activate pico && python3 backend/main.py) > logs/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "   Backend PID: $BACKEND_PID"
 echo "   Backend logs: logs/backend.log"
