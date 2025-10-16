@@ -116,6 +116,29 @@ class NotePlugin(Plugin, MCPServer):
             json.dump(note, f, indent=2)
         return note
     
+    def insert_into_note(self, note_id: str, content: str, position: Optional[int] = None) -> Dict[str, Any]:
+        """Insert content into a note at a specific position or append to end"""
+        note = self.get(note_id)
+        if not note:
+            raise ValueError(f"Note {note_id} not found")
+        
+        current_content = note['content'] or ''
+        
+        if position is not None and 0 <= position <= len(current_content):
+            # Insert at specific position
+            new_content = current_content[:position] + content + current_content[position:]
+        else:
+            # Append to end
+            new_content = current_content + content
+        
+        note['content'] = new_content
+        note['updated_at'] = datetime.now().isoformat()
+        
+        note_path = os.path.join(self.notes_dir, f"{note_id}.json")
+        with open(note_path, 'w') as f:
+            json.dump(note, f, indent=2)
+        return note
+    
     def delete(self, note_id: str) -> bool:
         """Delete a note"""
         note_path = os.path.join(self.notes_dir, f"{note_id}.json")
@@ -172,6 +195,25 @@ class NotePlugin(Plugin, MCPServer):
                     }
                 },
                 required=["note_id"]
+            ),
+            create_tool(
+                name="insert_into_note",
+                description="Insert content into a note at the cursor position or append to end. Use this when user says 'add this to my note' or 'insert this'. Content MUST be in HTML format (e.g., <p>text</p>, <ul><li>item</li></ul>, <strong>bold</strong>), NOT markdown.",
+                parameters={
+                    "note_id": {
+                        "type": "string",
+                        "description": "ID of the note to insert into"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to insert in HTML format (e.g., <p>Hello</p>, <ul><li>Item</li></ul>). Do NOT use markdown syntax."
+                    },
+                    "position": {
+                        "type": "number",
+                        "description": "Character position to insert at (optional). If not provided, appends to end."
+                    }
+                },
+                required=["note_id", "content"]
             )
         ]
     
@@ -184,6 +226,11 @@ class NotePlugin(Plugin, MCPServer):
         elif tool_name == "update_note":
             note_id = arguments.pop("note_id")
             return self.update(note_id, **arguments)
+        elif tool_name == "insert_into_note":
+            note_id = arguments.pop("note_id")
+            content = arguments.pop("content")
+            position = arguments.pop("position", None)
+            return self.insert_into_note(note_id, content, position)
         else:
             raise ValueError(f"Unknown tool: {tool_name}")
     

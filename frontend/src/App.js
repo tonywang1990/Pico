@@ -22,6 +22,7 @@ function App() {
     const saved = localStorage.getItem('darkMode');
     return saved ? JSON.parse(saved) : false;
   });
+  const [editorContext, setEditorContext] = useState(null);
 
   useEffect(() => {
     loadTodos();
@@ -113,7 +114,20 @@ function App() {
       // Refresh notes list if any were updated (but don't switch tabs)
       else if (metadata.updated_notes && metadata.updated_notes.length > 0) {
         console.log('Refreshing notes due to updates...');
-        await loadNotes();
+        
+        // Reload all notes to get fresh content
+        const response = await axios.get(`${API_URL}/notes`);
+        let allNotes = response.data;
+        
+        // Sort notes with main note first
+        allNotes.sort((a, b) => {
+          if (a.id === 'main') return -1;
+          if (b.id === 'main') return 1;
+          return new Date(b.updated_at) - new Date(a.updated_at);
+        });
+        
+        setNotes(allNotes);
+        console.log('Notes refreshed with updated content');
       }
     } catch (error) {
       console.error('Error handling chat actions:', error);
@@ -412,6 +426,7 @@ function App() {
           onDeleteNote={deleteNote}
           darkMode={darkMode}
           onToggleDarkMode={toggleDarkMode}
+          onEditorContextChange={setEditorContext}
         />
       </div>
 
@@ -421,7 +436,11 @@ function App() {
           onMouseDown={handleChatMouseDown}
           style={{ cursor: isResizingChat ? 'col-resize' : 'col-resize' }}
         />
-        <ChatPanel onChatAction={handleChatActions} />
+        <ChatPanel 
+          onChatAction={handleChatActions} 
+          currentNote={activeNote}
+          editorContext={editorContext}
+        />
       </div>
     </div>
   );

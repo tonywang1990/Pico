@@ -9,11 +9,49 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import './NoteEditor.css';
 
-function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, onCloseTab, onUpdateNote, onUpdateTitle, onLoadNote, onDeleteNote, darkMode, onToggleDarkMode }) {
+function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, onCloseTab, onUpdateNote, onUpdateTitle, onLoadNote, onDeleteNote, darkMode, onToggleDarkMode, onEditorContextChange }) {
   const [showNotesMenu, setShowNotesMenu] = useState(false);
   const [editingTabId, setEditingTabId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
   const titleInputRef = useRef(null);
+
+  // Helper function to get editor context at cursor
+  const getEditorContext = (editor) => {
+    if (!editor) return null;
+    
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+    
+    // Get cursor position in HTML
+    const html = editor.getHTML();
+    const pos = selection.from;
+    
+    // Determine context
+    const context = {
+      cursorPosition: pos,
+      htmlLength: html.length,
+    };
+    
+    // Check parent node types
+    if ($from.parent.type.name === 'listItem') {
+      // Check if it's in a bullet or ordered list
+      const grandparent = $from.node($from.depth - 1);
+      if (grandparent.type.name === 'bulletList') {
+        context.inList = 'bullet';
+      } else if (grandparent.type.name === 'orderedList') {
+        context.inList = 'ordered';
+      }
+    } else if ($from.parent.type.name === 'taskItem') {
+      context.inList = 'task';
+    } else if ($from.parent.type.name === 'heading') {
+      context.inHeading = $from.parent.attrs.level;
+    } else if ($from.parent.type.name === 'paragraph') {
+      context.inParagraph = true;
+    }
+    
+    return context;
+  };
 
   const editor = useEditor({
     extensions: [
@@ -49,6 +87,13 @@ function NoteEditor({ note, tabs, activeTab, notes, onTabChange, onCreateTab, on
       if (note) {
         const html = editor.getHTML();
         onUpdateNote(note.id, html);
+      }
+    },
+    onSelectionUpdate: ({ editor }) => {
+      // Update context when cursor moves
+      if (onEditorContextChange) {
+        const context = getEditorContext(editor);
+        onEditorContextChange(context);
       }
     },
     editorProps: {

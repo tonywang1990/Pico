@@ -47,7 +47,7 @@ class PicoAgent:
         return """You are Pico, a personalized AI assistant for note-taking and task management.
 
 **Core Capabilities (via tools):**
-- Search, create, and update notes
+- Search, create, update, and insert into notes
 - Manage todos (create, update, complete, delete, reorder)
 - Learn user preferences over time
 - Search the web for current information
@@ -57,11 +57,17 @@ class PicoAgent:
 2. **Search before modifying** - Use search_todos/search_notes to find items, then call update/delete/complete with the ID
 3. **Todos need due dates** - If user doesn't specify, ask before creating
 4. **Update preferences** - After completing tasks, call update_preferences() to remember patterns
+5. **Note context awareness** - When user says "add this to my note" or similar, use `insert_into_note` with the currently open note
 
 **Workflow for modifications:**
 1. Search for the item
 2. Get its ID from results
 3. Call the appropriate tool (update/complete/delete)
+
+**Note Insertion:**
+When user requests to add content to their current note, use `insert_into_note(note_id, content, position)`. 
+IMPORTANT: Content MUST be in HTML format (use <p>, <ul>, <li>, <strong>, etc.), NOT markdown. 
+Example: Use `<p><strong>Title</strong></p><ul><li>Item</li></ul>` instead of `**Title**\n- Item`.
 
 **Preference Learning:**
 Use `update_preferences({"general": {...}, "todos_plugin": {...}, "notes_plugin": {...}})` to store learnings.
@@ -71,10 +77,48 @@ Use for current events, real-time data, recent updates (5 searches max per reque
 
 Be concise and use Markdown formatting."""
 
-    def _build_system_message(self) -> str:
-        """Build system message with current date"""
+    def _build_system_message(self, note_context: Dict[str, Any] = None) -> str:
+        """Build system message with current date and optional note context"""
         today_date = datetime.now().strftime("%Y-%m-%d")
-        return f"{self._base_system_prompt}\n\nToday's date is {today_date}."
+        system_msg = f"{self._base_system_prompt}\n\nToday's date is {today_date}."
+        
+        # Add note context if provided
+        if note_context:
+            note_id = note_context.get('note_id')
+            note_title = note_context.get('note_title', 'Untitled')
+            cursor_pos = note_context.get('cursor_position')
+            editor_ctx = note_context.get('editor_context')
+            
+            context_info = f"\n\n**Current Note Context:**\n"
+            context_info += f"- Open note: '{note_title}' (ID: {note_id})\n"
+            if cursor_pos is not None:
+                context_info += f"- Cursor position: character {cursor_pos}\n"
+            
+            # Add editor context for formatting guidance
+            if editor_ctx:
+                context_info += "\n**Cursor Context (format content to match):**\n"
+                if editor_ctx.get('in_list'):
+                    list_type = editor_ctx.get('in_list')
+                    if list_type == 'bullet':
+                        context_info += "- Cursor is in a BULLET LIST → Format as: `<li><p>Your text</p></li>` (wrap in <li> tags)\n"
+                    elif list_type == 'ordered':
+                        context_info += "- Cursor is in a NUMBERED LIST → Format as: `<li><p>Your text</p></li>` (wrap in <li> tags)\n"
+                    elif list_type == 'task':
+                        context_info += "- Cursor is in a TASK LIST → Format as: `<li><p>Your text</p></li>` (wrap in <li> tags with checkboxes)\n"
+                elif editor_ctx.get('in_heading'):
+                    level = editor_ctx.get('in_heading')
+                    context_info += f"- Cursor is in a HEADING {level} → Format as: `<h{level}>Your text</h{level}>`\n"
+                elif editor_ctx.get('in_paragraph'):
+                    context_info += "- Cursor is in a PARAGRAPH → Format as: `<p>Your text</p>`\n"
+            
+            context_info += f"\nWhen user says 'add this to my note', use insert_into_note('{note_id}', content"
+            if cursor_pos is not None:
+                context_info += f", {cursor_pos}"
+            context_info += ") with HTML formatted to match surrounding context."
+            
+            system_msg += context_info
+        
+        return system_msg
     
     def get_tools(self) -> List[Dict[str, Any]]:
         """Get tools list (cached for performance)"""
@@ -90,6 +134,15 @@ Be concise and use Markdown formatting."""
         Generic tracking system that works for any plugin.
         """
         if not isinstance(result, dict) or "id" not in result:
+            return
+
+        # Special handling for insert_into_note - treat as update
+        if tool_name == "insert_into_note":
+            metadata_key = "updated_notes"
+            if metadata_key not in metadata:
+                metadata[metadata_key] = []
+            metadata[metadata_key].append(result["id"])
+            logger.info(f"📋 Tracked action: {metadata_key} -> {result['id']}")
             return
 
         # Extract action type from tool name (e.g., "create_note" -> "created_notes")
@@ -198,6 +251,46 @@ Be concise and use Markdown formatting."""
                 response_text += block.text
         return response_text
     
+    def _serialize_content_blocks(self, content_blocks: List[Any]) -> List[Dict[str, Any]]:
+        """
+        Serialize content blocks for sending back to Claude API.
+        Filters out any extra fields that aren't allowed by the API.
+        """
+        serialized = []
+        
+        for block in content_blocks:
+            if block.type == "text":
+                serialized.append({
+                    "type": "text",
+                    "text": block.text
+                })
+            elif block.type == "tool_use":
+                serialized.append({
+                    "type": "tool_use",
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input
+                })
+            elif block.type == "server_tool_use":
+                # Server tool use blocks should only have these fields
+                serialized.append({
+                    "type": "server_tool_use",
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input
+                })
+            elif block.type == "web_search_tool_result":
+                # Web search tool result blocks must be included with server tool use
+                serialized.append({
+                    "type": "web_search_tool_result",
+                    "tool_use_id": block.tool_use_id,
+                    "content": block.content,
+                })
+            else:
+                logger.warning(f"⚠️ Unknown block type: {block.type}")
+        
+        return serialized
+    
     def _call_claude(self, system_message: str, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], max_tokens: int) -> Any:
         """Make a Claude API call - extracted for DRY principle"""
         start_time = time.time()
@@ -225,6 +318,7 @@ Be concise and use Markdown formatting."""
         messages: List[Dict[str, str]],
         max_tokens: int = 2048,
         stream: bool = False,
+        note_context: Dict[str, Any] = None,
     ) -> Dict[str, Any] | Generator[Dict[str, Any], None, None]:
         """
         Process a chat message and return response with tool use support.
@@ -234,20 +328,23 @@ Be concise and use Markdown formatting."""
             messages: List of message dicts with 'role' and 'content'
             max_tokens: Maximum tokens for response
             stream: If True, yields streaming events; if False, returns complete response
+            note_context: Optional context about the currently open note (note_id, note_title, cursor_position)
 
         Returns:
             Dict with 'response' text and metadata about actions taken (if stream=False)
             Generator yielding events (if stream=True)
         """
         if stream:
-            return self._chat_stream(messages, max_tokens)
+            return self._chat_stream(messages, max_tokens, note_context)
         
         # Setup
         user_query = messages[-1]["content"] if messages else "No message"
         logger.info(f"=== New chat session ===")
         logger.info(f"User query: {user_query[:100]}...")
+        if note_context:
+            logger.info(f"Note context: {note_context.get('note_title', 'N/A')} (ID: {note_context.get('note_id', 'N/A')})")
 
-        system_message = self._build_system_message()
+        system_message = self._build_system_message(note_context)
         tools = self.get_tools()
         logger.info(f"Available tools for this session: {len(tools)}")
 
@@ -280,9 +377,13 @@ Be concise and use Markdown formatting."""
                         f"🔄 Sending {len(tool_results)} tool results back to Claude"
                     )
 
-                    # Append to conversation
-                    messages.append({"role": "assistant", "content": response.content})
-                    messages.append({"role": "user", "content": tool_results})
+                    # Append to conversation (serialize content blocks properly)
+                    messages.append({"role": "assistant", "content": self._serialize_content_blocks(response.content)})
+                    
+                    # Only append user message if there are actual tool results
+                    # (Server tools like web_search don't require tool results from us)
+                    if tool_results:
+                        messages.append({"role": "user", "content": tool_results})
                 else:
                     # Agent is satisfied, exit loop
                     break
@@ -312,14 +413,17 @@ Be concise and use Markdown formatting."""
         self,
         messages: List[Dict[str, str]],
         max_tokens: int = 2048,
+        note_context: Dict[str, Any] = None,
     ) -> Generator[Dict[str, Any], None, None]:
         """Streaming version of chat - uses Claude's native streaming for minimal latency"""
         # Setup
         user_query = messages[-1]["content"] if messages else "No message"
         logger.info(f"=== New streaming chat session ===")
         logger.info(f"User query: {user_query[:100]}...")
+        if note_context:
+            logger.info(f"Note context: {note_context.get('note_title', 'N/A')} (ID: {note_context.get('note_id', 'N/A')})")
 
-        system_message = self._build_system_message()
+        system_message = self._build_system_message(note_context)
         tools = self.get_tools()
 
         # Track all actions
@@ -372,8 +476,8 @@ Be concise and use Markdown formatting."""
                     if has_server_tools:
                         logger.info(f"🌐 Server tools detected in response")
                     
-                    # Check if Claude wants to use tools OR used server tools
-                    if final_message.stop_reason == "tool_use" or has_server_tools:
+                    # Check if Claude wants to use tools (MCP tools)
+                    if final_message.stop_reason == "tool_use":
                         iteration += 1
                         logger.info(f"🔧 Agentic iteration {iteration}: Claude requested tool use")
                         
@@ -382,15 +486,32 @@ Be concise and use Markdown formatting."""
                             final_message.content, actions_metadata
                         )
 
-                        # Append to conversation
-                        messages.append({"role": "assistant", "content": final_message.content})
-                        messages.append({"role": "user", "content": tool_results})
+                        # Append to conversation (serialize content blocks properly)
+                        messages.append({"role": "assistant", "content": self._serialize_content_blocks(final_message.content)})
+                        
+                        # Only append user message if there are actual tool results
+                        # (Server tools like web_search don't require tool results from us)
+                        if tool_results:
+                            messages.append({"role": "user", "content": tool_results})
                         
                         # Mark current text as intermediate thinking (not final response)
                         yield {"type": "mark_thinking"}
                         
                         # Add separator for readability between iterations
-                        yield {"type": "text_chunk", "text": "\n\n"}
+                        yield {"type": "text_chunk", "text": "\n\n---\n\n"}
+                    elif has_server_tools:
+                        # Server tools don't continue the loop, but mark as thinking if they were used
+                        iteration += 1
+                        logger.info(f"🔧 Agentic iteration {iteration}: Server tools used")
+                        
+                        # Process tool calls (for metadata tracking)
+                        self._process_tool_calls(final_message.content, actions_metadata)
+                        
+                        # Mark as thinking since tools were used
+                        yield {"type": "mark_thinking"}
+                        
+                        # Server tools are executed inline, so exit loop
+                        break
                     else:
                         # Final response received, exit loop
                         break

@@ -6,7 +6,7 @@ import './ChatPanel.css';
 
 const API_URL = 'http://localhost:8000/api';
 
-function ChatPanel({ onChatAction }) {
+function ChatPanel({ onChatAction, currentNote, editorContext }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +49,18 @@ function ChatPanel({ onChatAction }) {
       // Filter out any messages with empty content before sending
       const validMessages = newMessages.filter(msg => msg.content && msg.content.trim() !== '');
       
+      // Prepare note context if there's a current note
+      const noteContext = currentNote ? {
+        note_id: currentNote.id,
+        note_title: currentNote.title,
+        cursor_position: editorContext?.cursorPosition,
+        editor_context: editorContext ? {
+          in_list: editorContext.inList,
+          in_heading: editorContext.inHeading,
+          in_paragraph: editorContext.inParagraph,
+        } : null
+      } : null;
+      
       // Use streaming endpoint
       const response = await fetch(`${API_URL}/chat/stream`, {
         method: 'POST',
@@ -57,6 +69,7 @@ function ChatPanel({ onChatAction }) {
         },
         body: JSON.stringify({
           messages: validMessages,
+          note_context: noteContext,
         }),
       });
 
@@ -142,9 +155,12 @@ function ChatPanel({ onChatAction }) {
                   <>
                     {msg.thinkingLength > 0 && (
                       <div className="thinking-text">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {msg.content.substring(0, msg.thinkingLength)}
-                        </ReactMarkdown>
+                        <span className="thinking-emoji">🤔</span>
+                        <div>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {msg.content.substring(0, msg.thinkingLength)}
+                          </ReactMarkdown>
+                        </div>
                       </div>
                     )}
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>

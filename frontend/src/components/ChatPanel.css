@@ -125,24 +125,34 @@
 
 .thinking-text {
   color: var(--text-tertiary);
-  font-size: 12px;
-  opacity: 0.6;
+  font-size: 14px;
+  opacity: 0.7;
   font-style: italic;
   margin-bottom: 16px;
-  text-decoration: underline;
-  text-decoration-color: var(--border-secondary);
-  text-decoration-style: solid;
-  text-underline-offset: 3px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.thinking-text .thinking-emoji {
+  font-size: 16px;
+  opacity: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.thinking-text > div {
+  flex: 1;
 }
 
 .thinking-text p {
   margin: 0;
-  font-size: 12px !important;
+  font-size: 14px !important;
 }
 
 .thinking-text * {
   color: var(--text-tertiary) !important;
-  font-size: 12px !important;
+  font-size: 14px !important;
 }
 
 .message-content:hover {

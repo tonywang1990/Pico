@@ -100,8 +100,20 @@ class ChatMessage(BaseModel):
     role: str
     content: str
 
+class EditorContext(BaseModel):
+    in_list: Optional[str] = None  # 'bullet', 'ordered', 'task'
+    in_heading: Optional[int] = None  # 1, 2, or 3
+    in_paragraph: Optional[bool] = None
+
+class NoteContext(BaseModel):
+    note_id: str
+    note_title: Optional[str] = None
+    cursor_position: Optional[int] = None
+    editor_context: Optional[EditorContext] = None
+
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
+    note_context: Optional[NoteContext] = None
 
 # Routes
 @app.get("/")
@@ -168,8 +180,18 @@ async def chat(request: ChatRequest):
         # Convert messages to format expected by agent
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
         
+        # Convert note context if provided
+        note_context = None
+        if request.note_context:
+            note_context = {
+                "note_id": request.note_context.note_id,
+                "note_title": request.note_context.note_title,
+                "cursor_position": request.note_context.cursor_position,
+                "editor_context": request.note_context.editor_context.dict() if request.note_context.editor_context else None
+            }
+        
         # Use Pico Agent to process the chat
-        result = pico_agent.chat(messages=messages)
+        result = pico_agent.chat(messages=messages, note_context=note_context)
 
         return {
             "response": result["response"],
@@ -188,8 +210,18 @@ async def chat_stream(request: ChatRequest):
             # Convert messages to format expected by agent
             messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
             
+            # Convert note context if provided
+            note_context = None
+            if request.note_context:
+                note_context = {
+                    "note_id": request.note_context.note_id,
+                    "note_title": request.note_context.note_title,
+                    "cursor_position": request.note_context.cursor_position,
+                    "editor_context": request.note_context.editor_context.dict() if request.note_context.editor_context else None
+                }
+            
             # Stream events from agent
-            for event in pico_agent.chat(messages=messages, stream=True):
+            for event in pico_agent.chat(messages=messages, stream=True, note_context=note_context):
                 yield f"data: {json.dumps(event)}\n\n"
                 
         except Exception as e:
